@@ -347,6 +347,7 @@ OCR-Zeiten hängen von Seitenzahl, Auflösung und Hardware ab und werden deshalb
 | Tests | Vitest + Playwright | Unit-, Integrations- und E2E-Tests |
 | Packaging | electron-builder | Windows/macOS/Linux-Installer |
 | Auto-Update | electron-updater | Automatische Updates über GitHub Releases |
+| Installer | Go + Bubble Tea | TUI-Installer mit Versionsauswahl und Fortschritt |
 
 Vor der Implementierung werden Lizenzen aller Bibliotheken und deren Verteilung im Installer geprüft.
 
@@ -822,3 +823,152 @@ Unter `.github/ISSUE_TEMPLATE/` werden YAML-Vorlagen bereitgestellt:
     |-- bug_report.yml
     `-- feature_request.yml
 ```
+
+## 22. Installer (Go + Bubble Tea TUI)
+
+### Konzept
+
+Der Installer ist eine eigenständige Go-Anwendung mit TUI (Terminal User Interface), die SaveYourData von GitHub Releases herunterlädt und installiert. Inspiration: [FluxDB Installer](https://github.com/vynofc/FluxDB/tree/main/Installer).
+
+### Technologie
+
+| Bereich | Auswahl |
+| --- | --- |
+| Sprache | Go 1.22+ |
+| TUI-Framework | [Bubble Tea](https://github.com/charmbracelet/bubbletea) |
+| Komponenten | Bubbles (Spinner, ProgressBar, Viewport) |
+| Formulare | [Huh](https://github.com/charmbracelet/huh) (Versionsauswahl, Shortcut-Abfrage) |
+| Styling | [Lip Gloss](https://github.com/charmbracelet/lipgloss) |
+| Logging | [charmbracelet/log](https://github.com/charmbracelet/log) |
+
+### Build
+
+```
+# Windows
+cd Installer
+requirements.bat     # Prüft Go, go mod tidy, Build
+
+# Linux/macOS
+cd Installer
+bash requirements.sh
+```
+
+Ausgabe: `Installer/bin/SaveYourData-Installer.exe`
+
+### CLI-Flags
+
+| Flag | Beschreibung |
+| --- | --- |
+| `--tag <version>` | Bestimmte Version installieren (überspringt Auswahl) |
+| `--path <dir>` | Alternatives Installationsverzeichnis (Standard: `%LOCALAPPDATA%\SaveYourData`) |
+| `--silent` | Keine TUI, reiner Text-Output (für CI/Scripting) |
+| `--detail` | Detailmodus: interaktive Versionsauswahl + ausführliches Log |
+| `--noupdate` | Überspringt Update-Check beim Start |
+
+### Ablauf
+
+**Standard-Modus (ohne --detail):**
+```
+Version ermitteln → Download → Entpacken → Shortcut? → Done
+```
+
+1. **Version ermitteln**: Holt neuesten Release-Tag via GitHub API (`GET /repos/vynofc/SaveYourDocuments/releases/latest`)
+2. **Download**: Lädt `SaveYourData.zip` nach `%TEMP%` mit Fortschrittsbalken
+3. **Entpacken**: Extrahiert nach `%LOCALAPPDATA%\SaveYourData`, schreibt `version.txt`
+4. **Shortcut**: Huh-Confirm fragt nach Desktop- und Startmenü-Verknüpfung (via VBScript/cscript)
+5. **Done**: Erfolgsmeldung mit Installationspfad
+
+**Detail-Modus (mit --detail):**
+```
+Loading → Version wählen → Download → Entpacken → Shortcut? → Done
+```
+
+Zusätzlich: ausführlicher Log-Viewport mit API-Abfragen, Dateipfaden und Statusmeldungen.
+
+### State Machine
+
+```
+stateLoading → stateSelectVersion → stateDownloading → stateExtracting → stateAskShortcut → stateCreatingShortcut → stateDone
+     ↓                  ↓                   ↓                ↓                  ↓                    ↓               ↓
+  stateError        stateError          stateError      stateError         stateError           stateError   (Enter→Quit)
+```
+
+Mit `--tag` wird `stateSelectVersion` übersprungen.
+
+### Architektur (Dateien)
+
+| Datei | Zuständigkeit |
+| --- | --- |
+| `main.go` | Entrypoint, CLI-Flag-Parsing, TUI/Silent-Dispatch |
+| `model.go` | Bubble Tea Model (States, Messages, Typen) |
+| `update.go` | State Machine (Update-Funktion) mit huh-Integration |
+| `view.go` | Rendering: Step-Header, Content, Log-Viewport, Footer |
+| `forms.go` | huh-Formulare: Versionsauswahl + Shortcut-Abfrage |
+| `github.go` | GitHub API: Releases-Liste, Latest Tag, Download-URL |
+| `download.go` | ZIP-Download mit progressReader (Echtzeit-Fortschritt) |
+| `extract.go` | ZIP-Extraktion + Zip-Slip-Schutz |
+| `shortcut.go` | Desktop-Verknüpfung via VBScript (cscript) |
+| `helpers.go` | Hilfsfunktionen: Log-Formatierung, Step-Header |
+| `silent.go` | Silent-Mode-Logik (ohne Bubble Tea) |
+| `styles.go` | Lipgloss Styles (Dark-Theme, Steps, Log-Viewport) |
+
+### Abgrenzung
+
+Der Installer macht **nicht**:
+- Auto-Update (das macht SaveYourData selbst via Update-Check)
+- Deinstallation (`%LOCALAPPDATA%\SaveYourData` löschen reicht)
+- Admin-Rechte (Installation nach `%LOCALAPPDATA%` benötigt keine Elevation)
+
+## 23. Update-Check (GitHub API)
+
+### Konzept
+
+SaveYourData prüft beim Start über die GitHub API, ob eine neuere Version verfügbar ist. Der Mechanismus orientiert sich an FluxDB und arbeitet ohne Authentifizierung.
+
+### API-Endpunkte
+
+| Endpunkt | Zweck |
+| --- | --- |
+| `GET /repos/vynofc/SaveYourDocuments/releases/latest` | Neuesten Release-Tag ermitteln |
+
+### Request-Header
+
+```
+User-Agent: SaveYourData
+Accept: application/vnd.github+json
+```
+
+Der `User-Agent` ist Pflicht — ohne ihn blockt GitHub den Request mit `403 Forbidden`.
+
+### Update-Logik
+
+```
+1. HTTP GET /repos/vynofc/SaveYourDocuments/releases/latest  (Timeout 15s)
+2. Falls 403 oder 429 → API-Limit erreicht, Abbruch
+3. Falls anderer Fehler → Abbruch (stiller Fehlschlag, App startet normal)
+4. JSON parsen → "tag_name" extrahieren (z.B. "v1.2.0")
+5. Remote-Version mit lokaler Version vergleichen (Normalize + Compare)
+6. Falls remote > local → Update verfügbar, Benutzer benachrichtigen
+7. Download-URL bauen:
+   https://github.com/vynofc/SaveYourDocuments/releases/download/{tag}/SaveYourData-Installer.exe
+8. Installer herunterladen und starten (oder electron-updater nutzen)
+```
+
+### Version-Normalisierung
+
+- `v1.2.0` → `1.2.0`
+- `!beta`-Suffix wird entfernt
+- Numerischer Vergleich mit String-Fallback für Pre-Release-Suffixe
+
+### Fehlerbehandlung
+
+- **403 / 429 Too Many Requests**: Rate-Limit (60 Requests/Stunde ohne Token). Wird protokolliert, App startet normal.
+- **Netzwerkfehler / Timeout**: Stiller Fehlschlag, App startet normal.
+- **Kein Release gefunden**: Fehler, Abbruch des Update-Checks.
+
+### Besonderheiten
+
+- **Kein API-Token**: Unauthentifizierte Requests → strenges Rate-Limit (60/h).
+- **`--noupdate` Flag**: Überspringt den Update-Check komplett.
+- **Download nicht über API**: Der Binary-Download läuft direkt über `github.com/.../releases/download/{tag}/...`, nicht über die API.
+- **Update-Check läuft im Main-Prozess** vor dem Öffnen des Hauptfensters, blockiert den Start nicht.
