@@ -1,0 +1,139 @@
+name: Issue Triage
+
+on:
+  issues:
+    types: [opened]
+
+jobs:
+  triage:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/github-script@v7
+        with:
+          script: |
+            const issue = context.payload.issue;
+            const body = issue.body || '';
+            const title = issue.title || '';
+
+            // Parse component from template dropdown
+            const componentMatch = body.match(/### Komponente\s*\n\s*(.+)/);
+            const component = componentMatch ? componentMatch[1].trim() : null;
+
+            // Fallback: keyword detection
+            let labels = [];
+            if (component) {
+              labels.push(component.toLowerCase());
+            } else {
+              const kwMap = {
+                'Renderer': 'renderer',
+                'Main': 'main',
+                'OCR': 'ocr',
+                'Datenbank': 'datenbank',
+                'Packaging': 'packaging',
+                'Installer': 'packaging'
+              };
+              for (const [kw, label] of Object.entries(kwMap)) {
+                if (body.includes(kw) || title.includes(kw)) {
+                  labels.push(label);
+                  break;
+                }
+              }
+            }
+
+            // Type detection
+            const hasBugLabel = issue.labels.some(l => l.name === 'bug');
+            const hasEnhancementLabel = issue.labels.some(l => l.name === 'enhancement');
+            if (!hasBugLabel && !hasEnhancementLabel) {
+              if (body.includes('bug') || body.includes('Fehler') || body.includes('fehler') || title.toLowerCase().includes('bug')) {
+                labels.push('bug');
+              } else {
+                labels.push('enhancement');
+              }
+            }
+
+            // Add labels
+            if (labels.length > 0) {
+              await github.rest.issues.addLabels({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: issue.number,
+                labels: labels
+              });
+            }
+
+            // Auto-assign
+            await github.rest.issues.addAssignees({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: issue.number,
+              assignees: ['vynofc']
+            });
+
+            // Blocker detection
+            const blockerMatch = body.match(/(?:blocked by|blockiert von)\s+#(\d+)/i);
+            if (blockerMatch) {
+              const blockedBy = parseInt(blockerMatch[1]);
+              // Comment on current issue
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: issue.number,
+                body: `🔗 Dieses Issue ist blockiert von #${blockedBy}.`
+              });
+              // Comment on blocking issue
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: blockedBy,
+                body: `🔗 Blockiert #${issue.number} (${title}).`
+              });
+            }
+
+      - name: Create issue branch
+        if: always()
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const issue = context.payload.issue;
+            const title = issue.title || '';
+            const number = issue.number;
+
+            const slug = title
+              .toLowerCase()
+              .replace(/[^a-z0-9]+/g, '-')
+              .replace(/^-|-$/g, '')
+              .substring(0, 50);
+
+            const branchName = `issue/${number}-${slug}`;
+
+            // Try development branch first, fallback to main
+            const refs = ['development', 'main'];
+            let baseRef = 'main';
+            for (const ref of refs) {
+              try {
+                await github.rest.git.getRef({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  ref: `heads/${ref}`
+                });
+                baseRef = ref;
+                break;
+              } catch {
+                continue;
+              }
+            }
+
+            const baseRefData = await github.rest.git.getRef({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              ref: `heads/${baseRef}`
+            });
+
+            await github.rest.git.createRef({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              ref: `refs/heads/${branchName}`,
+              sha: baseRefData.data.object.sha
+            });
+
+            console.log(`Created branch ${branchName} from ${baseRef}`);

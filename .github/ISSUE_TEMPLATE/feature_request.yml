@@ -1,0 +1,44 @@
+name: Feature Request
+description: Neue Funktion vorschlagen
+title: "[Feature]: "
+labels: ["enhancement"]
+assignees:
+  - vynOFC
+body:
+  - type: dropdown
+    id: component
+    attributes:
+      label: Komponente
+      description: Welche Komponente ist betroffen?
+      options:
+        - Renderer
+        - Main
+        - OCR
+        - Datenbank
+        - Packaging
+    validations:
+      required: true
+  - type: textarea
+    id: description
+    attributes:
+      label: Feature-Beschreibung
+      description: Beschreibe das gewünschte Feature.
+    validations:
+      required: true
+  - type: dropdown
+    id: scope
+    attributes:
+      label: Umfang
+      options:
+        - "🟢 small"
+        - "🟡 medium"
+        - "🔴 big"
+    validations:
+      required: true
+  - type: textarea
+    id: motivation
+    attributes:
+      label: Motivation / Nutzen
+      description: Warum ist dieses Feature nützlich?
+    validations:
+      required: false
