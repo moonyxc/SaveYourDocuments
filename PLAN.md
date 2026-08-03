@@ -499,6 +499,8 @@ SaveYourData/
 |-- tsconfig.json
 |-- electron-builder.yml
 |-- vite.config.ts
+|-- build.bat
+|-- build.sh
 |-- docs/
 |   |-- architecture.md
 |   |-- database.md
@@ -533,6 +535,30 @@ SaveYourData/
 |   `-- fixtures/
 `-- packaging/
 ```
+
+### Build-Skripte
+
+`build.bat` (Windows) und `build.sh` (Linux/macOS) sind interaktive Hilfsskripte im Projektstammverzeichnis, die den Entwicklungs-Workflow vereinfachen:
+
+```
+╔══════════════════════════════════╗
+║   SaveYourData Build Script    ║
+╠══════════════════════════════════╣
+║ [1] Requirements installieren   ║
+║     → pnpm install              ║
+║     → Prüft Node.js 20+         ║
+║ [2] App bauen                   ║
+║     → pnpm build                ║
+║     → electron-builder          ║
+║ [3] Beides (1 + 2)              ║
+║ [4] Beenden                     ║
+╚══════════════════════════════════╝
+```
+
+- **Option 1**: Installiert alle Abhängigkeiten (`pnpm install`) und prüft, ob Node.js 20+ vorhanden ist.
+- **Option 2**: Führt den Produktions-Build aus (`pnpm build` + `electron-builder`).
+- **Option 3**: Kombiniert 1 und 2 in einem Durchlauf.
+- **Option 4**: Beendet das Skript.
 
 ## 13. Fehlerbehandlung
 
