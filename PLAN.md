@@ -789,11 +789,14 @@ Die folgenden GitHub-Actions-Workflows werden im Repository unter `.github/workf
 #### issue-triage.yml – Automatische Issue-Klassifizierung
 
 - Läuft bei `issues: [opened]`.
-- Klassifiziert nach Komponente (Renderer, Main, OCR, Datenbank) anhand von Keywords und Template-Feldern.
-- Erkennt Bug vs. Enhancement anhand von Labels und Keywords.
-- Auto-Assignment an Maintainer.
-- Erkennt `blocked by #123` / `blockiert von #123` im Body und verlinkt Issues bidirektional.
-- Erstellt automatisch einen Feature-Branch `issue/{nummer}-{slug}` vom `Development`-Branch (Fallback: `main`).
+- Verwendet `actions/github-script@v7`.
+- **Komponenten-Klassifizierung** in zwei Phasen:
+  1. Parst das Template-Dropdown-Feld (`### Komponente`) aus dem Issue-Body.
+  2. Fallback: Keyword-Erkennung (Renderer, Main, OCR, Datenbank, Installer).
+- **Typ-Erkennung**: Bug vs. Enhancement anhand vorhandener Labels und Keyword-Fallback.
+- **Auto-Assignment**: Weist automatisch dem Maintainer zu.
+- **Blocker-Erkennung**: Erkennt `blocked by #123` / `blockiert von #123` im Body und verlinkt Issues bidirektional (Kommentar + Body-Update auf beiden Issues).
+- **Issue-Branch**: Erstellt automatisch `issue/{nummer}-{slug}` vom `Development`-Branch (Fallback: `main`). Läuft auch bei Fehlern in vorherigen Steps (`if: always()`).
 
 ### Issue-Vorlagen
 
@@ -801,14 +804,18 @@ Unter `.github/ISSUE_TEMPLATE/` werden YAML-Vorlagen bereitgestellt:
 
 #### bug_report.yml
 
-- Label: `bug`, Auto-Assignment.
-- Pflichtfelder: Komponente (Dropdown), Fehlerbeschreibung.
+- Label: `bug`, Auto-Assignment: `vynOFC`.
+- Pflichtfeld: Komponente (Dropdown: Renderer, Main, OCR, Datenbank, Packaging).
+- Pflichtfeld: Fehlerbeschreibung.
+- Pflichtfeld: Umfang (🟢 small / 🟡 medium / 🔴 big).
 - Optional: Reproduktionsschritte, Version.
 
 #### feature_request.yml
 
-- Label: `enhancement`, Auto-Assignment.
-- Pflichtfelder: Komponente (Dropdown), Feature-Beschreibung.
+- Label: `enhancement`, Auto-Assignment: `vynOFC`.
+- Pflichtfeld: Komponente (Dropdown: Renderer, Main, OCR, Datenbank, Packaging).
+- Pflichtfeld: Feature-Beschreibung.
+- Pflichtfeld: Umfang (🟢 small / 🟡 medium / 🔴 big).
 - Optional: Motivation / Nutzen.
 
 ### CI/CD in der Projektstruktur
