@@ -3,7 +3,7 @@
 **Status:** Entwurf 1.0  
 **Stand:** 26. Juli 2026  
 **Zielplattform:** Windows 10/11, später optional Linux und macOS  
-**Technische Basis:** C++20, Qt 6 und SQLite/SQLCipher
+**Technische Basis:** Electron, TypeScript und SQLite/SQLCipher
 
 ## 1. Kurzbeschreibung
 
@@ -310,11 +310,11 @@ OCR-Zeiten hängen von Seitenzahl, Auflösung und Hardware ab und werden deshalb
 
 ### Wartbarkeit
 
-- C++20 ohne plattformspezifische Logik im Domänenkern.
-- Klare Trennung von Oberfläche, Anwendungslogik, Persistenz und externen Bibliotheken.
+- TypeScript mit strict mode, ohne plattformspezifische Logik im Domänenkern.
+- Klare Trennung von Oberfläche (Renderer), Anwendungslogik (Main), Persistenz und externen Bibliotheken.
 - Datenbankschema wird ausschließlich über versionierte Migrationen geändert.
 - Öffentliche Kernkomponenten erhalten automatisierte Tests.
-- Compilerwarnungen werden im Projektcode als Fehler behandelt.
+- ESLint mit TypeScript-strict-Regeln, keine ungenutzten Warnungen im Projektcode.
 
 ## 8. Technische Architektur
 
@@ -322,18 +322,20 @@ OCR-Zeiten hängen von Seitenzahl, Auflösung und Hardware ab und werden deshalb
 
 | Bereich | Auswahl | Zweck |
 | --- | --- | --- |
-| Sprache | C++20 | Kernanwendung und Geschäftslogik |
-| Oberfläche | Qt 6 Widgets | Native Desktop-Oberfläche |
-| Buildsystem | CMake mit Presets | Reproduzierbare Builds |
-| Abhängigkeiten | vcpkg Manifest Mode | Versionierte Bibliotheken |
-| Datenbank | SQLite mit FTS5 | Metadaten, BLOBs und Volltextsuche |
-| Verschlüsselung | SQLCipher | Verschlüsseltes Gesamtarchiv |
-| OCR | Tesseract und Leptonica | Lokale Texterkennung |
-| Bildverarbeitung | OpenCV | Drehen, Entzerren und Optimieren |
-| PDF | Qt PDF | Rendering und Vorschau von PDF-Seiten |
-| Kryptografie | libsodium | Argon2id, sichere Zufallswerte und Speicherhilfen |
-| Tests | Qt Test und CTest | Unit-, Integrations- und Systemtests |
-| Packaging | CPack/WiX | Windows-Installer |
+| Sprache | TypeScript 5.x (strict) | Kernanwendung und Geschäftslogik |
+| Runtime | Node.js 20+ | Backend-Prozesse und native Module |
+| Oberfläche | Electron 28+ | Cross-Platform Desktop-Framework |
+| UI-Framework | React 18 + Tailwind CSS | Komponenten und Styling |
+| Buildsystem | Vite + electron-builder | Entwicklung und Packaging |
+| Abhängigkeiten | pnpm | Paketverwaltung |
+| Datenbank | better-sqlite3 mit FTS5 | Metadaten, BLOBs und Volltextsuche |
+| Verschlüsselung | SQLCipher (via better-sqlite3) | Verschlüsseltes Gesamtarchiv |
+| OCR | tesseract.js | Lokale Texterkennung |
+| Bildverarbeitung | sharp | Drehen, Entzerren und Optimieren |
+| PDF | pdf.js / pdf-lib | Rendering, Textextraktion und Vorschau |
+| Kryptografie | libsodium-wrappers | Argon2id, sichere Zufallswerte und Speicherhilfen |
+| Tests | Vitest + Playwright | Unit-, Integrations- und E2E-Tests |
+| Packaging | electron-builder | Windows/macOS/Linux-Installer |
 
 Vor der Implementierung werden Lizenzen aller Bibliotheken und deren Verteilung im Installer geprüft.
 
@@ -341,15 +343,16 @@ Vor der Implementierung werden Lizenzen aller Bibliotheken und deren Verteilung 
 
 ```mermaid
 flowchart TB
-    UI[Qt Widgets UI] --> APP[Application Services]
+    UI[React UI] --> IPC[Electron IPC Bridge]
+    IPC --> APP[Application Services]
     APP --> DOMAIN[Domain Model]
     APP --> JOBS[Background Job Queue]
     APP --> SEARCH[Search Service]
     APP --> AUDIT[Audit Service]
     JOBS --> IMPORT[Import Pipeline]
-    IMPORT --> PDF[PDF Renderer]
-    IMPORT --> IMAGE[OpenCV Preprocessing]
-    IMPORT --> OCR[Tesseract OCR]
+    IMPORT --> PDF[PDF Renderer / pdf.js]
+    IMPORT --> IMAGE[Sharp Preprocessing]
+    IMPORT --> OCR[tesseract.js OCR]
     IMPORT --> CLASSIFY[Extraction and Classification]
     SEARCH --> REPO[Repository Layer]
     AUDIT --> REPO
@@ -360,17 +363,18 @@ flowchart TB
 
 ### Schichten
 
-1. **Presentation:** Fenster, Dialoge, Tabellen, Vorschau und Navigation.
-2. **Application:** Anwendungsfälle wie Importieren, Bestätigen, Suchen, Verknüpfen und Exportieren.
-3. **Domain:** Dokumente, Firmen, Kategorien, Tags, Zahlungen, Beziehungen und Regeln.
-4. **Infrastructure:** SQLite, OCR, PDF, Dateisystem, Kryptografie und Betriebssystemintegration.
+1. **Presentation:** React-Komponenten, Fenster, Dialoge, Tabellen, Vorschau und Navigation.
+2. **IPC Bridge:** Electron-Context-Bridge und Preload-Skripte für sichere Kommunikation zwischen Renderer und Main-Prozess.
+3. **Application:** Anwendungsfälle wie Importieren, Bestätigen, Suchen, Verknüpfen und Exportieren (Main-Prozess).
+4. **Domain:** Dokumente, Firmen, Kategorien, Tags, Zahlungen, Beziehungen und Regeln (shared, plattformunabhängig).
+5. **Infrastructure:** better-sqlite3, tesseract.js, sharp, pdf.js, Dateisystem, libsodium und Betriebssystemintegration.
 
-Abhängigkeiten zeigen nach innen. Der Domänenkern kennt weder Qt Widgets noch SQLite.
+Abhängigkeiten zeigen nach innen. Der Domänenkern kennt weder React noch better-sqlite3.
 
 ### Nebenläufigkeit
 
-- UI-Operationen laufen im Hauptthread.
-- Import, Hashing, Seitenrendering, OCR und Vorschaubilder laufen als begrenzte Hintergrundjobs.
+- UI-Rendering läuft im Electron-Renderer-Prozess (React).
+- Import, Hashing, Seitenrendering, OCR und Vorschaubilder laufen als Worker-Threads oder im Main-Prozess über asynchrone Jobs.
 - Pro Dokument werden Pipeline-Schritte in definierter Reihenfolge ausgeführt.
 - Datenbankschreibvorgänge werden kurz gehalten und zentral koordiniert.
 - Jobs unterstützen Fortschritt, Abbruch und erneuten Versuch.
@@ -479,32 +483,42 @@ Externe Dienste werden nur als ausdrücklich aktivierbare Erweiterung geplant un
 
 ```text
 SaveYourData/
-|-- CMakeLists.txt
-|-- CMakePresets.json
-|-- vcpkg.json
-|-- cmake/
+|-- package.json
+|-- tsconfig.json
+|-- electron-builder.yml
+|-- vite.config.ts
 |-- docs/
 |   |-- architecture.md
 |   |-- database.md
 |   `-- security.md
 |-- src/
-|   |-- app/
-|   |-- domain/
-|   |-- infrastructure/
-|   |   |-- database/
-|   |   |-- import/
-|   |   |-- ocr/
-|   |   |-- pdf/
-|   |   `-- security/
-|   `-- ui/
+|   |-- main/
+|   |   |-- app/
+|   |   |-- infrastructure/
+|   |   |   |-- database/
+|   |   |   |-- import/
+|   |   |   |-- ocr/
+|   |   |   |-- pdf/
+|   |   |   `-- security/
+|   |   `-- index.ts
+|   |-- preload/
+|   |   `-- index.ts
+|   |-- renderer/
+|   |   |-- components/
+|   |   |-- hooks/
+|   |   |-- pages/
+|   |   |-- stores/
+|   |   `-- App.tsx
+|   `-- shared/
+|       `-- domain/
 |-- resources/
 |   |-- migrations/
 |   `-- translations/
 |-- tests/
 |   |-- unit/
 |   |-- integration/
-|   |-- fixtures/
-|   `-- system/
+|   |-- e2e/
+|   `-- fixtures/
 `-- packaging/
 ```
 
@@ -560,10 +574,10 @@ SaveYourData/
 ### Qualitätsprüfungen
 
 - Debug- und Release-Build in CI
-- Unit- und Integrationstests über CTest
-- Statische Analyse mit clang-tidy
-- Formatprüfung mit clang-format
-- Sanitizer-Builds auf unterstützten Plattformen
+- Unit- und Integrationstests über Vitest
+- E2E-Tests mit Playwright
+- Statische Analyse mit ESLint + TypeScript strict
+- Formatprüfung mit Prettier
 - Abhängigkeits- und Lizenzprüfung vor Releases
 - Manuelle Prüfung von Backup und Wiederherstellung für jedes Release
 
@@ -572,7 +586,7 @@ SaveYourData/
 ### Phase 0: Entscheidungen und technische Prototypen
 
 - [ ] Unterstützte Windows-Versionen und Qt-6-Version festlegen.
-- [ ] Lizenzen von Qt, SQLCipher, Tesseract, OpenCV und PDF-Komponente prüfen.
+- [ ] Lizenzen von Electron, better-sqlite3, SQLCipher, tesseract.js, sharp und pdf.js prüfen.
 - [ ] SQLite-BLOB-Streaming mit einer großen Testdatei validieren.
 - [ ] Verschlüsseltes Archiv inklusive Backup und Wiederherstellung erproben.
 - [ ] OCR-Qualität für deutsche Rechnungen, Schreiben und Scans messen.
@@ -582,8 +596,8 @@ SaveYourData/
 
 ### Phase 1: Anwendungs- und Archivgrundlage
 
-- [ ] CMake-, vcpkg-, CI- und Teststruktur einrichten.
-- [ ] Qt-Hauptfenster mit Archivauswahl erstellen.
+- [ ] pnpm-, Vite-, CI- und Teststruktur einrichten.
+- [ ] Electron-Hauptfenster mit Archivauswahl und React-UI erstellen.
 - [ ] Datenbankverbindung, Migrationen und Repository-Schicht implementieren.
 - [ ] Neues verschlüsseltes und unverschlüsseltes Archiv anlegen.
 - [ ] Sperren, Entsperren und sichere Fehlerzustände implementieren.
@@ -605,7 +619,7 @@ SaveYourData/
 ### Phase 3: OCR und Metadatenextraktion
 
 - [ ] PDF-Textübernahme und Seitenerkennung implementieren.
-- [ ] OpenCV-Aufbereitung integrieren.
+- [ ] Sharp-Aufbereitung integrieren.
 - [ ] Tesseract für Deutsch und Englisch anbinden.
 - [ ] OCR-Ergebnisse pro Seite speichern und mit FTS5 indexieren.
 - [ ] Datum, Betrag, Währung und Nummern erkennen.
