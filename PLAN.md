@@ -339,15 +339,14 @@ OCR-Zeiten hängen von Seitenzahl, Auflösung und Hardware ab und werden deshalb
 | Buildsystem | Vite + electron-builder | Entwicklung und Packaging |
 | Abhängigkeiten | pnpm | Paketverwaltung |
 | Datenbank | better-sqlite3 mit FTS5 | Metadaten, BLOBs und Volltextsuche |
-| Verschlüsselung | SQLCipher (via better-sqlite3) | Verschlüsseltes Gesamtarchiv |
+| Verschlüsselung | @journeyapps/sqlcipher | Verschlüsseltes Gesamtarchiv (SQLCipher via better-sqlite3-kompatible API) |
 | OCR | tesseract.js | Lokale Texterkennung |
 | Bildverarbeitung | sharp | Drehen, Entzerren und Optimieren |
 | PDF | pdf.js / pdf-lib | Rendering, Textextraktion und Vorschau |
 | Kryptografie | libsodium-wrappers | Argon2id, sichere Zufallswerte und Speicherhilfen |
 | Tests | Vitest + Playwright | Unit-, Integrations- und E2E-Tests |
 | Packaging | electron-builder | Windows/macOS/Linux-Installer |
-| Auto-Update | electron-updater | Automatische Updates über GitHub Releases |
-| Installer | Go + Bubble Tea | TUI-Installer mit Versionsauswahl und Fortschritt |
+| Auto-Update | GitHub REST API | Update-Check beim Start, kein Token nötig |
 
 Vor der Implementierung werden Lizenzen aller Bibliotheken und deren Verteilung im Installer geprüft.
 
@@ -785,6 +784,7 @@ Die folgenden GitHub-Actions-Workflows werden im Repository unter `.github/workf
 - Erzeugt Installer (`.exe`, `.dmg`, `.AppImage`).
 - Hängt die Installer-Artefakte an das Release an.
 - SHA-256-Prüfsummen für alle Artefakte generieren.
+- Der Windows-Installer wird als `SaveYourData-Setup.exe` bereitgestellt (wird vom Update-Check referenziert).
 
 #### issue-triage.yml – Automatische Issue-Klassifizierung
 
@@ -824,106 +824,11 @@ Unter `.github/ISSUE_TEMPLATE/` werden YAML-Vorlagen bereitgestellt:
     `-- feature_request.yml
 ```
 
-## 22. Installer (Go + Bubble Tea TUI)
+## 22. Update-Check (GitHub API)
 
 ### Konzept
 
-Der Installer ist eine eigenständige Go-Anwendung mit TUI (Terminal User Interface), die SaveYourData von GitHub Releases herunterlädt und installiert. Inspiration: [FluxDB Installer](https://github.com/vynofc/FluxDB/tree/main/Installer).
-
-### Technologie
-
-| Bereich | Auswahl |
-| --- | --- |
-| Sprache | Go 1.22+ |
-| TUI-Framework | [Bubble Tea](https://github.com/charmbracelet/bubbletea) |
-| Komponenten | Bubbles (Spinner, ProgressBar, Viewport) |
-| Formulare | [Huh](https://github.com/charmbracelet/huh) (Versionsauswahl, Shortcut-Abfrage) |
-| Styling | [Lip Gloss](https://github.com/charmbracelet/lipgloss) |
-| Logging | [charmbracelet/log](https://github.com/charmbracelet/log) |
-
-### Build
-
-```
-# Windows
-cd Installer
-requirements.bat     # Prüft Go, go mod tidy, Build
-
-# Linux/macOS
-cd Installer
-bash requirements.sh
-```
-
-Ausgabe: `Installer/bin/SaveYourData-Installer.exe`
-
-### CLI-Flags
-
-| Flag | Beschreibung |
-| --- | --- |
-| `--tag <version>` | Bestimmte Version installieren (überspringt Auswahl) |
-| `--path <dir>` | Alternatives Installationsverzeichnis (Standard: `%LOCALAPPDATA%\SaveYourData`) |
-| `--silent` | Keine TUI, reiner Text-Output (für CI/Scripting) |
-| `--detail` | Detailmodus: interaktive Versionsauswahl + ausführliches Log |
-| `--noupdate` | Überspringt Update-Check beim Start |
-
-### Ablauf
-
-**Standard-Modus (ohne --detail):**
-```
-Version ermitteln → Download → Entpacken → Shortcut? → Done
-```
-
-1. **Version ermitteln**: Holt neuesten Release-Tag via GitHub API (`GET /repos/vynofc/SaveYourDocuments/releases/latest`)
-2. **Download**: Lädt `SaveYourData.zip` nach `%TEMP%` mit Fortschrittsbalken
-3. **Entpacken**: Extrahiert nach `%LOCALAPPDATA%\SaveYourData`, schreibt `version.txt`
-4. **Shortcut**: Huh-Confirm fragt nach Desktop- und Startmenü-Verknüpfung (via VBScript/cscript)
-5. **Done**: Erfolgsmeldung mit Installationspfad
-
-**Detail-Modus (mit --detail):**
-```
-Loading → Version wählen → Download → Entpacken → Shortcut? → Done
-```
-
-Zusätzlich: ausführlicher Log-Viewport mit API-Abfragen, Dateipfaden und Statusmeldungen.
-
-### State Machine
-
-```
-stateLoading → stateSelectVersion → stateDownloading → stateExtracting → stateAskShortcut → stateCreatingShortcut → stateDone
-     ↓                  ↓                   ↓                ↓                  ↓                    ↓               ↓
-  stateError        stateError          stateError      stateError         stateError           stateError   (Enter→Quit)
-```
-
-Mit `--tag` wird `stateSelectVersion` übersprungen.
-
-### Architektur (Dateien)
-
-| Datei | Zuständigkeit |
-| --- | --- |
-| `main.go` | Entrypoint, CLI-Flag-Parsing, TUI/Silent-Dispatch |
-| `model.go` | Bubble Tea Model (States, Messages, Typen) |
-| `update.go` | State Machine (Update-Funktion) mit huh-Integration |
-| `view.go` | Rendering: Step-Header, Content, Log-Viewport, Footer |
-| `forms.go` | huh-Formulare: Versionsauswahl + Shortcut-Abfrage |
-| `github.go` | GitHub API: Releases-Liste, Latest Tag, Download-URL |
-| `download.go` | ZIP-Download mit progressReader (Echtzeit-Fortschritt) |
-| `extract.go` | ZIP-Extraktion + Zip-Slip-Schutz |
-| `shortcut.go` | Desktop-Verknüpfung via VBScript (cscript) |
-| `helpers.go` | Hilfsfunktionen: Log-Formatierung, Step-Header |
-| `silent.go` | Silent-Mode-Logik (ohne Bubble Tea) |
-| `styles.go` | Lipgloss Styles (Dark-Theme, Steps, Log-Viewport) |
-
-### Abgrenzung
-
-Der Installer macht **nicht**:
-- Auto-Update (das macht SaveYourData selbst via Update-Check)
-- Deinstallation (`%LOCALAPPDATA%\SaveYourData` löschen reicht)
-- Admin-Rechte (Installation nach `%LOCALAPPDATA%` benötigt keine Elevation)
-
-## 23. Update-Check (GitHub API)
-
-### Konzept
-
-SaveYourData prüft beim Start über die GitHub API, ob eine neuere Version verfügbar ist. Der Mechanismus orientiert sich an FluxDB und arbeitet ohne Authentifizierung.
+SaveYourData prüft beim Start über die GitHub REST API, ob eine neuere Version verfügbar ist. Der Mechanismus arbeitet ohne Authentifizierung und ergänzt den electron-builder-Installer.
 
 ### API-Endpunkte
 
@@ -950,8 +855,8 @@ Der `User-Agent` ist Pflicht — ohne ihn blockt GitHub den Request mit `403 For
 5. Remote-Version mit lokaler Version vergleichen (Normalize + Compare)
 6. Falls remote > local → Update verfügbar, Benutzer benachrichtigen
 7. Download-URL bauen:
-   https://github.com/vynofc/SaveYourDocuments/releases/download/{tag}/SaveYourData-Installer.exe
-8. Installer herunterladen und starten (oder electron-updater nutzen)
+   https://github.com/vynofc/SaveYourDocuments/releases/download/{tag}/SaveYourData-Setup.exe
+8. Setup herunterladen, ausführen und App aktualisieren
 ```
 
 ### Version-Normalisierung
