@@ -280,6 +280,15 @@ Der Status `Überfällig` wird aus `Offen` und einem überschrittenen Fälligkei
 - Temporäre Klartextdateien werden vermieden. Unvermeidbare temporäre Daten werden restriktiv angelegt und nach der Verarbeitung entfernt.
 - Exporte in unverschlüsselte Ziele benötigen einen klaren Hinweis.
 
+### Electron-Sicherheit
+
+- `contextIsolation: true` und `sandbox` für alle Renderer-Prozesse.
+- `nodeIntegration: false`, Kommunikation ausschließlich über Preload-Skripte und IPC-Bridge.
+- Content Security Policy (CSP) wird strikt gesetzt, keine `unsafe-eval` oder `unsafe-inline`.
+- Externe Ressourcen werden nur von vertrauenswürdigen Quellen geladen.
+- `webSecurity: true`, Navigation auf externe URLs wird unterbunden.
+- Signierte Builds mit Code-Signing-Zertifikat für Windows (Authenticode) und macOS (notarization).
+
 ### Zuverlässigkeit
 
 - Das Originaldokument wird unverändert und mit Prüfsumme gespeichert.
@@ -307,6 +316,7 @@ OCR-Zeiten hängen von Seitenzahl, Auflösung und Hardware ab und werden deshalb
 - Klare Fehlermeldungen mit einer möglichen nächsten Aktion.
 - Keine endgültige Löschung oder Überschreibung ohne Bestätigung.
 - Datums-, Zahlen- und Währungsformate orientieren sich an der eingestellten Sprache.
+- Dark Mode und Light Mode werden unterstützt, umschaltbar und automatisch an die Systemeinstellung anpassbar.
 
 ### Wartbarkeit
 
@@ -336,6 +346,7 @@ OCR-Zeiten hängen von Seitenzahl, Auflösung und Hardware ab und werden deshalb
 | Kryptografie | libsodium-wrappers | Argon2id, sichere Zufallswerte und Speicherhilfen |
 | Tests | Vitest + Playwright | Unit-, Integrations- und E2E-Tests |
 | Packaging | electron-builder | Windows/macOS/Linux-Installer |
+| Auto-Update | electron-updater | Automatische Updates über GitHub Releases |
 
 Vor der Implementierung werden Lizenzen aller Bibliotheken und deren Verteilung im Installer geprüft.
 
@@ -469,6 +480,7 @@ Externe Dienste werden nur als ausdrücklich aktivierbare Erweiterung geplant un
 7. **Protokoll:** Tagesansicht und Export des Audit-Logs.
 8. **Einstellungen:** Archiv, OCR, Sprache, Namensmuster, Backup und Sicherheit.
 9. **Entwicklerwerkzeuge:** Passwortgeschützter Diagnosebereich.
+10. **Dashboard:** Übersicht mit Archivstatistiken, Dokumentanzahl pro Kategorie, offene Zahlungen, zuletzt importierte Dokumente und Speicherplatzverbrauch.
 
 ### Wichtige Interaktionen
 
@@ -732,6 +744,9 @@ Diese Punkte blockieren die Planerstellung nicht, müssen aber spätestens in Ph
 - Mobile Erfassungs-App
 - Standardisierte Exporte für Buchhaltungssysteme
 - Dokument-Transfer vom Smartphone via [Localsend](https://github.com/localsend/localsend) (lokal, verschlüsselt, quelloffen)
+- Ablauffristen für Dokumente (Garantie, Vertrag, Ausweis) mit Erinnerungsfunktion
+- Stapelverarbeitung: Mehrere Dokumente gleichzeitig taggen, kategorisieren oder Metadaten setzen
+- Überwachter Importordner: Automatischer Import neuer Dateien aus einem konfigurierbaren Ordner
 
 ## 20. Definition of Done für jede Funktion
 
