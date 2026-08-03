@@ -597,7 +597,7 @@ SaveYourData/
 
 ### Phase 0: Entscheidungen und technische Prototypen
 
-- [ ] Unterstützte Windows-Versionen und Qt-6-Version festlegen.
+- [ ] Unterstützte Windows-Versionen und Electron-28-Version festlegen.
 - [ ] Lizenzen von Electron, better-sqlite3, SQLCipher, tesseract.js, sharp und pdf.js prüfen.
 - [ ] SQLite-BLOB-Streaming mit einer großen Testdatei validieren.
 - [ ] Verschlüsseltes Archiv inklusive Backup und Wiederherstellung erproben.
@@ -732,7 +732,7 @@ Diese Punkte blockieren die Planerstellung nicht, müssen aber spätestens in Ph
 ## 19. Mögliche Erweiterungen nach dem MVP
 
 - WIA/TWAIN-Scannerintegration
-- Überwachter Importordner
+- Überwachter Importordner: Automatischer Import neuer Dateien aus einem konfigurierbaren Ordner
 - E-Mail-Import
 - Lokale Zahlungserinnerungen
 - Gespeicherte Suchen und intelligente Sammlungen
@@ -746,7 +746,6 @@ Diese Punkte blockieren die Planerstellung nicht, müssen aber spätestens in Ph
 - Dokument-Transfer vom Smartphone via [Localsend](https://github.com/localsend/localsend) (lokal, verschlüsselt, quelloffen)
 - Ablauffristen für Dokumente (Garantie, Vertrag, Ausweis) mit Erinnerungsfunktion
 - Stapelverarbeitung: Mehrere Dokumente gleichzeitig taggen, kategorisieren oder Metadaten setzen
-- Überwachter Importordner: Automatischer Import neuer Dateien aus einem konfigurierbaren Ordner
 
 ## 20. Definition of Done für jede Funktion
 
