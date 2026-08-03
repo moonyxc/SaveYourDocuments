@@ -745,3 +745,65 @@ Eine Funktion ist erst abgeschlossen, wenn:
 - notwendige Datenbankmigrationen getestet sind,
 - Benutzer- oder Entwicklerdokumentation aktualisiert ist,
 - Release-Build, Tests und statische Analyse erfolgreich laufen.
+
+## 21. CI/CD und GitHub-Workflows
+
+### Automatisierte Workflows
+
+Die folgenden GitHub-Actions-Workflows werden im Repository unter `.github/workflows/` eingerichtet:
+
+#### build.yml – Build bei Push und Pull Request
+
+- Läuft bei jedem Push auf `main` und bei jedem Pull Request.
+- Checkout, Node.js 20+ Setup, pnpm-Installation.
+- TypeScript-Check (`tsc --noEmit`), ESLint, Prettier-Prüfung.
+- Unit- und Integrationstests mit Vitest.
+- Build von Main- und Renderer-Prozess (`pnpm build`).
+- E2E-Tests mit Playwright (headless).
+- Hochladen der Build-Artefakte als ZIP.
+
+#### release.yml – Release bei veröffentlichtem GitHub Release
+
+- Läuft bei `release: [published]`.
+- Baut die Anwendung mit `electron-builder` für Windows, macOS und Linux.
+- Erzeugt Installer (`.exe`, `.dmg`, `.AppImage`).
+- Hängt die Installer-Artefakte an das Release an.
+- SHA-256-Prüfsummen für alle Artefakte generieren.
+
+#### issue-triage.yml – Automatische Issue-Klassifizierung
+
+- Läuft bei `issues: [opened]`.
+- Klassifiziert nach Komponente (Renderer, Main, OCR, Datenbank) anhand von Keywords und Template-Feldern.
+- Erkennt Bug vs. Enhancement anhand von Labels und Keywords.
+- Auto-Assignment an Maintainer.
+- Erkennt `blocked by #123` / `blockiert von #123` im Body und verlinkt Issues bidirektional.
+- Erstellt automatisch einen Feature-Branch `issue/{nummer}-{slug}` vom `Development`-Branch (Fallback: `main`).
+
+### Issue-Vorlagen
+
+Unter `.github/ISSUE_TEMPLATE/` werden YAML-Vorlagen bereitgestellt:
+
+#### bug_report.yml
+
+- Label: `bug`, Auto-Assignment.
+- Pflichtfelder: Komponente (Dropdown), Fehlerbeschreibung.
+- Optional: Reproduktionsschritte, Version.
+
+#### feature_request.yml
+
+- Label: `enhancement`, Auto-Assignment.
+- Pflichtfelder: Komponente (Dropdown), Feature-Beschreibung.
+- Optional: Motivation / Nutzen.
+
+### CI/CD in der Projektstruktur
+
+```text
+.github/
+|-- workflows/
+|   |-- build.yml
+|   |-- release.yml
+|   `-- issue-triage.yml
+`-- ISSUE_TEMPLATE/
+    |-- bug_report.yml
+    `-- feature_request.yml
+```
