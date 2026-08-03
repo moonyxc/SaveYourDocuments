@@ -731,6 +731,7 @@ Diese Punkte blockieren die Planerstellung nicht, müssen aber spätestens in Ph
 - Verschlüsselte Synchronisation zwischen eigenen Geräten
 - Mobile Erfassungs-App
 - Standardisierte Exporte für Buchhaltungssysteme
+- Dokument-Transfer vom Smartphone via [Localsend](https://github.com/localsend/localsend) (lokal, verschlüsselt, quelloffen)
 
 ## 20. Definition of Done für jede Funktion
 
