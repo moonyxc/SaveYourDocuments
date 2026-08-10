@@ -4,27 +4,43 @@ on:
   push:
     branches: [main]
   pull_request:
-    branches: [main]
 
 jobs:
   build:
-    runs-on: ubuntu-latest
+    name: Build (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-latest, ubuntu-latest, macos-latest]
+
     steps:
-      - uses: actions/checkout@v4
-      - uses: pnpm/action-setup@v4
-        with:
-          version: latest
-      - uses: actions/setup-node@v4
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
         with:
           node-version: 20
-          cache: pnpm
-      - run: pnpm install
-      - run: pnpm typecheck
-      - run: pnpm lint
-      - run: pnpm format:check
-      - run: pnpm test
-      - run: pnpm build:all
-      - uses: actions/upload-artifact@v4
+          cache: npm
+
+      - name: Install dependencies
+        run: npm install
+
+      - name: Build (TypeScript)
+        run: npm run build
+
+      - name: Package app
+        run: npm run dist -- --publish never
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
         with:
-          name: saveyourdata-dist
-          path: dist/
+          name: build-${{ matrix.os }}
+          path: |
+            release/*.zip
+            release/*.exe
+            release/*.AppImage
+            release/*.dmg
+          if-no-files-found: ignore
+          retention-days: 7

@@ -4,22 +4,15 @@
     "module": "CommonJS",
     "moduleResolution": "node",
     "lib": ["ES2022"],
+    "outDir": "dist/main",
+    "rootDir": "src",
     "strict": true,
     "esModuleInterop": true,
     "skipLibCheck": true,
     "forceConsistentCasingInFileNames": true,
     "resolveJsonModule": true,
-    "noUnusedLocals": true,
-    "noUnusedParameters": true,
-    "noFallthroughCasesInSwitch": true,
-    "outDir": "dist",
-    "rootDir": "src",
-    "baseUrl": ".",
-    "paths": {
-      "@shared/*": ["src/shared/*"],
-      "@main/*": ["src/main/*"]
-    }
+    "sourceMap": false,
+    "declaration": false
   },
-  "include": ["src/main/**/*", "src/shared/**/*", "src/preload/**/*"],
-  "exclude": ["node_modules", "dist", "release", "tests"]
+  "include": ["src/main/**/*", "src/shared/**/*"]
 }

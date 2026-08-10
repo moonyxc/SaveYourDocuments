@@ -1,101 +1,53 @@
-# SaveYourData
+# Save Your Documents
 
-Lokale Desktop-Anwendung zum sicheren Archivieren, Erkennen, Ordnen und Wiederfinden wichtiger Dokumente.
+Electron + TypeScript App zum Archivieren und automatischen Erkennen wichtiger Dokumente (Fotos/Scans).
 
-## Überblick
+## Funktionen
 
-SaveYourData importiert Fotos, Scans oder PDF-Dateien, liest deren Inhalt per OCR, erkennt Dokumentart, Firma, Datum, Betrag und weitere Metadaten und schlägt eine passende Ablage vor. Vor der endgültigen Archivierung bestätigt oder korrigiert der Benutzer die erkannten Angaben.
-
-- **Lokal & offline** – keine Cloud-Abhängigkeit
-- **OCR & Klassifizierung** – automatische Erkennung von Metadaten
-- **Prüfworkflow** – jeder Vorschlag wird vor der Archivierung kontrolliert
-- **Volltextsuche** – über OCR-Text, Metadaten, Tags und Filter
-- **Verschlüsselbar** – optionales SQLCipher-Archiv
-- **Audit-Log** – vollständige Protokollierung aller Aktionen
-
-## Technologie
-
-| Bereich | Technologie |
-|---|---|
-| Sprache | TypeScript 5.x (strict) |
-| Runtime | Node.js 20+ |
-| Oberfläche | Electron 28+ |
-| UI | React 18 + Tailwind CSS |
-| Build | Vite + electron-builder |
-| Pakete | pnpm |
-| Datenbank | better-sqlite3 mit FTS5 |
-| OCR | tesseract.js |
-| Bildverarbeitung | sharp |
-| PDF | pdf.js |
-| Tests | Vitest + Playwright |
-
-## Projektstruktur
-
-```
-src/
-├── main/               # Electron-Hauptprozess
-│   ├── app/            # Anwendungslogik, IPC, Updates
-│   └── infrastructure/ # Datenbank, OCR, Import
-├── preload/            # Context-Bridge (sichere IPC)
-├── renderer/           # React-UI
-│   ├── components/
-│   ├── pages/
-│   └── assets/
-└── shared/             # Plattformunabhängige Domäne
-    └── domain/         # Typen, Konstanten
-```
+- **Import von Scans/Fotos** (PNG, JPG, PDF u. a.) mit OCR (Tesseract, deutsch)
+- **Automatische Erkennung**: Kategorie (Versicherung, Kauf, Vertrag, Behoerde, Rechnung, Sonstiges), Unterbereich, Datum und Betrag
+- **Validierung vor dem Speichern**: alle erkannten Daten koennen korrigiert werden
+- **Firmen-Erkennung**: neue Firmen werden erkannt und es wird gefragt, ob ein Ordner angelegt werden soll
+- **Alles in einer Datei**: Metadaten-Datenbank als gzip-komprimierte JSON-Datei (`saveyourdocuments.sydoc`), Dokumente als Dateien im Firmen-Ordner
+- **Tages-Logs**: alle Aktionen als JSONL pro Tag unter `data/logs/YYYY-MM-DD.jsonl`
+- **Metadaten**: Datum, Betrag, Tags, Notizen; an/aus im Dateinamen anzeigbar
+- **Suche + Filter + Tags** (Volltext ueber Titel, OCR-Text, Firma, Tags)
+- **Bezahlt-Status** vermerkbar
+- **Verknuepfungen** zwischen Dokumenten (z. B. Schreiben + Antwort)
+- **Developer Tools**: gesperrt, Passwort-Schutz (in den Einstellungen setzen/freischalten)
 
 ## Entwicklung
 
 ```bash
-# Voraussetzungen
-node -v  # >= 20
-pnpm -v  # >= 8
-
-# Installation
-pnpm install
-
-# Entwicklung (Renderer + HMR)
-pnpm dev
-
-# TypeScript-Check
-pnpm typecheck
-
-# Lint & Format
-pnpm lint
-pnpm format
-
-# Tests
-pnpm test
-
-# Build
-pnpm build:all
+npm install
+npm start
 ```
 
-## Build & Release
+## Build
+
+Interaktives Menue:
+
+- Windows: `build.bat`
+- Linux/macOS: `./build.sh`
+
+Optionen: 1) Requirements installieren, 2) Clean, 3) Build, 4) Paketieren, 5) Alles.
+
+Manuell:
 
 ```bash
-# Windows
-build.bat
-
-# Linux/macOS
-./build.sh
+npm run build     # TypeScript -> dist/
+npm run dist      # electron-builder -> release/ (Zip + Installer)
 ```
 
-Der Build erzeugt den Installer via `electron-builder` im `release/`-Verzeichnis.
+## Daten-Speicherort
+
+Alle Daten liegen im Benutzer-Datenordner der App (`userData/data`):
+
+- `saveyourdocuments.sydoc` (komprimierte Datenbank)
+- `documents/<Firma>/...` (Originaldateien)
+- `logs/YYYY-MM-DD.jsonl` (Tages-Logs)
 
 ## CI/CD
 
-GitHub Actions:
-
-- **build.yml** – TypeScript-Check, Lint, Tests, Build bei Push/PR
-- **release.yml** – Release-Builds für Windows, macOS, Linux bei GitHub Release
-- **issue-triage.yml** – Automatische Issue-Klassifizierung, Label-Zuweisung und Branch-Erstellung
-
-## Lizenz
-
-MIT – siehe [LICENSE](./LICENSE)
-
-## Mitwirken
-
-Features und Bugs über [GitHub Issues](https://github.com/vynofc/SaveYourDocuments/issues) einreichen. Issue-Vorlagen für Bug Reports und Feature Requests sind vorhanden.
+- **Build**: bei jedem Commit (`.github/workflows/build.yml`), Matrix Windows/Linux/macOS
+- **Release**: bei Release-Erstellung (`.github/workflows/release.yml`) wird gebaut, gezippt und Zip + Installer an das Release angehaengt

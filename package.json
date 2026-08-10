@@ -1,91 +1,30 @@
 {
-  "name": "saveyourdata",
-  "version": "0.1.0",
-  "description": "Lokale Desktop-Anwendung zum sicheren Archivieren, Erkennen, Ordnen und Wiederfinden wichtiger Dokumente",
-  "main": "dist/main/index.js",
-  "author": "vynOFC",
+  "name": "save-your-documents",
+  "version": "1.0.0",
+  "description": "Verwaltet und erkennt wichtige Dokumente automatisch (Electron + TypeScript)",
+  "author": "vynofc",
   "license": "MIT",
   "private": true,
+  "main": "dist/main/main/index.js",
   "scripts": {
-    "dev": "pnpm run build:electron && vite",
-    "dev:electron": "electron .",
-    "build": "tsc && vite build",
     "build:main": "tsc -p tsconfig.main.json",
-    "build:renderer": "vite build",
-    "build:all": "npm run build:main && npm run build:renderer",
-    "build:electron": "electron-rebuild -f -w better-sqlite3",
-    "start": "electron .",
-    "dist": "electron-builder",
-    "postinstall": "electron-builder install-app-deps",
-    "test": "vitest run",
-    "test:watch": "vitest",
-    "test:e2e": "playwright test",
-    "lint": "eslint src/ --ext .ts,.tsx",
-    "lint:fix": "eslint src/ --ext .ts,.tsx --fix",
-    "format": "prettier --write \"src/**/*.{ts,tsx,css,json}\"",
-    "format:check": "prettier --check \"src/**/*.{ts,tsx,css,json}\"",
-    "typecheck": "tsc --noEmit"
+    "build:preload": "tsc -p tsconfig.preload.json",
+    "build:renderer": "tsc -p tsconfig.renderer.json && node scripts/copy-static.js",
+    "build": "npm run build:main && npm run build:preload && npm run build:renderer",
+    "start": "npm run build && electron .",
+    "dist": "npm run build && electron-builder",
+    "dist:win": "npm run build && electron-builder --win",
+    "dist:linux": "npm run build && electron-builder --linux",
+    "clean": "node scripts/clean.js",
+    "typecheck": "tsc -p tsconfig.main.json --noEmit && tsc -p tsconfig.preload.json --noEmit && tsc -p tsconfig.renderer.json --noEmit"
   },
   "dependencies": {
-    "better-sqlite3": "^11.7.0",
-    "libsodium-wrappers": "^0.7.15",
-    "pdf-lib": "^1.17.1",
-    "pdfjs-dist": "^4.5.136",
-    "react": "^18.3.1",
-    "react-dom": "^18.3.1",
-    "sharp": "^0.33.5",
-    "tesseract.js": "^5.1.1",
-    "uuid": "^10.0.0"
+    "tesseract.js": "^5.1.0"
   },
   "devDependencies": {
-    "@electron/rebuild": "^4.2.0",
-    "@types/better-sqlite3": "^7.6.12",
-    "@types/react": "^18.3.12",
-    "@types/react-dom": "^18.3.1",
-    "@types/uuid": "^10.0.0",
-    "@typescript-eslint/eslint-plugin": "^8.18.0",
-    "@typescript-eslint/parser": "^8.18.0",
-    "@vitejs/plugin-react": "^4.3.4",
-    "autoprefixer": "^10.4.20",
-    "electron": "^33.2.1",
-    "electron-builder": "^25.1.8",
-    "eslint": "^9.16.0",
-    "playwright": "^1.49.1",
-    "postcss": "^8.4.49",
-    "prettier": "^3.4.2",
-    "tailwindcss": "^3.4.17",
-    "typescript": "^5.7.2",
-    "vite": "^6.0.5",
-    "vite-plugin-electron": "^0.28.8",
-    "vite-plugin-electron-renderer": "^0.14.6",
-    "vitest": "^2.1.8"
-  },
-  "build": {
-    "appId": "com.vynofc.saveyourdata",
-    "productName": "SaveYourData",
-    "directories": {
-      "output": "release"
-    },
-    "files": [
-      "dist/**/*",
-      "resources/**/*"
-    ],
-    "npmRebuild": false,
-    "nodeGypRebuild": false,
-    "electronDist": "node_modules/.pnpm/electron@33.4.11_supports-color@7.2.0/node_modules/electron/dist",
-    "win": {
-      "target": "nsis",
-      "artifactName": "SaveYourData-Setup.exe"
-    },
-    "nsis": {
-      "oneClick": false,
-      "allowToChangeInstallationDirectory": true
-    },
-    "mac": {
-      "target": "dmg"
-    },
-    "linux": {
-      "target": "AppImage"
-    }
+    "@types/node": "^20.14.0",
+    "electron": "^31.0.0",
+    "electron-builder": "^24.13.3",
+    "typescript": "^5.4.5"
   }
 }

@@ -1,38 +1,27 @@
-appId: com.vynofc.saveyourdata
-productName: SaveYourData
-copyright: Copyright © 2026 vynOFC
-
+appId: com.vynofc.saveyourdocuments
+productName: SaveYourDocuments
 directories:
   output: release
-  buildResources: resources
-
 files:
-  - dist/**/*
-  - resources/**/*
-
+  - dist/**
+  - package.json
+asar: true
 win:
-  target: nsis
-  icon: resources/icon.ico
-  artifactName: SaveYourData-Setup.exe
-
+  target:
+    - nsis
+    - zip
+  artifactName: ${productName}-${version}-${os}-${arch}.${ext}
 nsis:
   oneClick: false
   allowToChangeInstallationDirectory: true
-  installerIcon: resources/icon.ico
-  createDesktopShortcut: true
-  createStartMenuShortcut: true
-
-mac:
-  target: dmg
-  icon: resources/icon.icns
-  category: public.app-category.productivity
-
+  shortcutName: SaveYourDocuments
 linux:
-  target: AppImage
-  icon: resources/icon.png
+  target:
+    - AppImage
+    - zip
   category: Office
-
-publish:
-  provider: github
-  owner: vynofc
-  repo: SaveYourDocuments
+  artifactName: ${productName}-${version}-${os}-${arch}.${ext}
+mac:
+  target:
+    - zip
+  category: public.app-category.productivity

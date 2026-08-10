@@ -1,16 +1,30 @@
+# Dependencies
 node_modules/
+
+# Build output
 dist/
 release/
 out/
-.env
-.env.*
-*.syd
-*.syd-wal
-*.syd-shm
+
+# Logs
+logs/
+*.log
+npm-debug.log*
+
+# OS
 .DS_Store
 Thumbs.db
-*.log
-coverage/
-playwright-report/
-test-results/
-.vite/
+
+# Editor
+.vscode/
+.idea/
+
+# Electron builder cache
+*.blockmap
+
+# App data (local test data)
+*.sydoc
+*.sydoc.gz
+
+# Tesseract trained data cache
+*.traineddata

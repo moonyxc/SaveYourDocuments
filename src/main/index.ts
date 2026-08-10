@@ -1,129 +1,105 @@
-import { app, BrowserWindow, session } from 'electron';
-import * as path from 'path';
-import { registerIpcHandlers } from './app/ipc-handlers';
-import { checkForUpdates } from './app/update-check';
-import { DatabaseManager } from './infrastructure/database/manager';
-import { AuditService } from './app/audit-service';
-import { jobQueue } from './infrastructure/jobs/queue';
-import { importPipeline } from './infrastructure/import/pipeline';
-import { logger } from './app/logger';
+import fs from 'fs';
+import path from 'path';
+import { app, BrowserWindow, globalShortcut } from 'electron';
+import { Database } from './database';
+import { DailyLogger } from './logger';
+import { registerIpcHandlers } from './ipc';
+
+const isDev = !app.isPackaged;
 
 let mainWindow: BrowserWindow | null = null;
-let dbManager: DatabaseManager | null = null;
-let auditService: AuditService | null = null;
+
+const dataDir = path.join(app.getPath('userData'), 'data');
+const documentsRoot = path.join(dataDir, 'documents');
+const tmpDir = path.join(dataDir, 'tmp');
+const thumbDir = path.join(documentsRoot, '.thumbnails');
+
+for (const dir of [dataDir, documentsRoot, tmpDir, thumbDir]) {
+  fs.mkdirSync(dir, { recursive: true });
+}
+
+const logger = new DailyLogger(dataDir);
+const db = new Database(dataDir, logger);
+
+const devTools = { enabled: false };
 
 function createWindow(): void {
-  logger.info('Creating main window');
-
   mainWindow = new BrowserWindow({
-    width: 1400,
-    height: 900,
-    minWidth: 1024,
-    minHeight: 700,
-    title: 'SaveYourData',
-    backgroundColor: '#0f172a',
+    width: 1280,
+    height: 820,
+    minWidth: 900,
+    minHeight: 600,
+    title: 'Save Your Documents',
+    backgroundColor: '#f3f4f6',
+    autoHideMenuBar: true,
     webPreferences: {
-      preload: path.join(__dirname, '..', 'preload', 'index.js'),
+      preload: path.join(__dirname, '..', '..', 'preload', 'preload', 'index.js'),
       contextIsolation: true,
       nodeIntegration: false,
       sandbox: false,
-      webSecurity: true,
-    },
-    show: false,
+      devTools: true
+    }
   });
 
-  mainWindow.once('ready-to-show', () => {
-    mainWindow?.show();
-    logger.info('Main window shown');
+  mainWindow.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
+
+  mainWindow.webContents.on('before-input-event', (event, input) => {
+    const wantsDevTools =
+      input.key === 'F12' ||
+      ((input.control || input.meta) && input.shift && ['I', 'J', 'C'].includes(input.key.toUpperCase()));
+    if (wantsDevTools) {
+      if (!devTools.enabled && !isDev) {
+        event.preventDefault();
+        logger.warn('devtools:blocked');
+      }
+    }
   });
 
-  mainWindow.webContents.on('did-fail-load', (_event, errorCode, errorDescription) => {
-    logger.error(`Page load failed: ${errorCode} ${errorDescription}`);
-  });
+  mainWindow.loadFile(path.join(__dirname, '..', '..', 'renderer', 'renderer', 'index.html'));
 
   mainWindow.on('closed', () => {
     mainWindow = null;
   });
 
-  if (process.env.NODE_ENV === 'development') {
-    logger.info('Loading dev URL: http://localhost:5173');
-    mainWindow.loadURL('http://localhost:5173');
-    mainWindow.webContents.openDevTools();
-  } else {
-    const indexPath = path.join(__dirname, '..', 'renderer', 'index.html');
-    logger.info(`Loading file: ${indexPath}`);
-    mainWindow.loadFile(indexPath);
-  }
+  logger.info('app:window-created');
 }
 
-function setupSecurity(): void {
-  session.defaultSession.webRequest.onHeadersReceived((details, callback) => {
-    callback({
-      responseHeaders: {
-        ...details.responseHeaders,
-        'Content-Security-Policy': [
-          "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self' data:; connect-src 'self' https://api.github.com",
-        ],
-      },
-    });
+app.whenReady().then(() => {
+  registerIpcHandlers({
+    db,
+    logger,
+    dataDir,
+    documentsRoot,
+    tmpDir,
+    thumbDir,
+    devTools,
+    getWindow: () => mainWindow
   });
-}
-
-process.on('uncaughtException', (error) => {
-  logger.error('Uncaught exception', { message: error.message, stack: error.stack });
-  console.error('CRASH:', error.message);
-  console.error(error.stack);
-});
-
-process.on('unhandledRejection', (reason) => {
-  logger.error('Unhandled rejection', { reason: String(reason) });
-  console.error('UNHANDLED REJECTION:', reason);
-});
-
-app.whenReady().then(async () => {
-  logger.info('App ready, initializing');
-  setupSecurity();
-
-  dbManager = new DatabaseManager();
-  auditService = new AuditService();
-
-  registerIpcHandlers(dbManager, auditService, importPipeline, jobQueue);
 
   createWindow();
 
-  const skipUpdate = process.argv.includes('--noupdate');
-  if (!skipUpdate) {
-    checkForUpdates().catch((err) => {
-      logger.warn('Update check failed', { error: err.message });
-    });
-  }
-
-  app.on('activate', () => {
-    if (BrowserWindow.getAllWindows().length === 0) {
-      createWindow();
+  globalShortcut.register('F12', () => {
+    if (!devTools.enabled && !isDev) return;
+    if (!mainWindow) return;
+    if (mainWindow.webContents.isDevToolsOpened()) {
+      mainWindow.webContents.closeDevTools();
+    } else {
+      mainWindow.webContents.openDevTools({ mode: 'detach' });
     }
   });
+
+  app.on('activate', () => {
+    if (BrowserWindow.getAllWindows().length === 0) createWindow();
+  });
+
+  logger.info('app:ready', { version: app.getVersion(), dataDir });
 });
 
 app.on('window-all-closed', () => {
-  logger.info('All windows closed');
-  try {
-    dbManager?.close();
-  } catch (err) {
-    logger.error('Error closing database', { error: String(err) });
-  }
-  if (process.platform !== 'darwin') {
-    app.quit();
-  }
+  if (process.platform !== 'darwin') app.quit();
 });
 
-app.on('before-quit', () => {
-  logger.info('App quitting');
-  try {
-    dbManager?.close();
-  } catch (err) {
-    logger.error('Error closing database on quit', { error: String(err) });
-  }
+app.on('will-quit', () => {
+  globalShortcut.unregisterAll();
+  logger.info('app:quit');
 });
-
-export { dbManager, auditService, importPipeline, jobQueue };
