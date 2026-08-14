@@ -1,0 +1,71 @@
+name: Release
+
+on:
+  release:
+    types: [created]
+
+jobs:
+  release:
+    strategy:
+      matrix:
+        os: [windows-latest, ubuntu-latest, macos-latest]
+        include:
+          - os: windows-latest
+            artifact_name: win
+            installer_ext: exe
+          - os: ubuntu-latest
+            artifact_name: linux
+            installer_ext: AppImage
+          - os: macos-latest
+            artifact_name: mac
+            installer_ext: dmg
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build app
+        run: npm run build
+
+      - name: Build Electron (portable + installer)
+        run: npm run electron:build
+
+      - name: Create ZIP (Windows)
+        if: matrix.os == 'windows-latest'
+        run: |
+          Compress-Archive -Path dist/win-unpacked/* -DestinationPath saveyourdocuments-${{ github.event.release.tag_name }}-${{ matrix.artifact_name }}.zip
+
+      - name: Create ZIP (Linux/Mac)
+        if: matrix.os != 'windows-latest'
+        run: |
+          cd dist/${{ matrix.artifact_name }}-unpacked
+          zip -r ../../saveyourdocuments-${{ github.event.release.tag_name }}-${{ matrix.artifact_name }}.zip .
+          cd ../..
+
+      - name: Upload ZIP to Release
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ github.event.release.upload_url }}
+          asset_path: saveyourdocuments-${{ github.event.release.tag_name }}-${{ matrix.artifact_name }}.zip
+          asset_name: saveyourdocuments-${{ github.event.release.tag_name }}-${{ matrix.artifact_name }}.zip
+          asset_content_type: application/zip
+
+      - name: Upload Installer to Release
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ github.event.release.upload_url }}
+          asset_path: dist/saveyourdocuments-${{ github.event.release.tag_name }}.${{ matrix.installer_ext }}
+          asset_name: saveyourdocuments-${{ github.event.release.tag_name }}.${{ matrix.installer_ext }}
+          asset_content_type: application/octet-stream

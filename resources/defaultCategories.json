@@ -1,0 +1,14 @@
+{
+  "categories": [
+    { "id": 1, "name": "Versicherung", "color": "#3B82F6", "icon": "shield" },
+    { "id": 2, "name": "Kauf", "color": "#22C55E", "icon": "shopping-cart" },
+    { "id": 3, "name": "Bank", "color": "#F59E0B", "icon": "bank" },
+    { "id": 4, "name": "Vertrag", "color": "#8B5CF6", "icon": "document-text" },
+    { "id": 5, "name": "Behörde", "color": "#EF4444", "icon": "office-building" }
+  ],
+  "companies": [
+    { "id": 1, "name": "AOK", "folderPath": "aok" },
+    { "id": 2, "name": "Amazon", "folderPath": "amazon" },
+    { "id": 3, "name": "Finanzamt", "folderPath": "finanzamt" }
+  ]
+}
