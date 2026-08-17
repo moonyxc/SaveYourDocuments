@@ -18,13 +18,13 @@ export function SettingsPage() {
   return (
     <div className="max-w-2xl space-y-6">
       {error && (
-        <div className="bg-red-500/10 border border-red-500/30 rounded-xl p-4">
+        <div className="bg-red-500/5 border border-red-500/20 rounded-lg p-4">
           <p className="text-sm text-red-400">{error}</p>
         </div>
       )}
 
-      <div className="bg-slate-800 rounded-xl border border-slate-700 p-6 space-y-4">
-        <h3 className="text-lg font-semibold text-slate-100">Allgemein</h3>
+      <div className="bg-slate-900 rounded-lg border border-slate-800 p-6 space-y-5">
+        <h3 className="text-base font-semibold text-slate-100">Allgemein</h3>
 
         <Select
           label="Sprache"
@@ -36,7 +36,7 @@ export function SettingsPage() {
           ]}
         />
 
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-3">
           <input
             type="checkbox"
             id="autoValidate"
@@ -50,8 +50,8 @@ export function SettingsPage() {
         </div>
       </div>
 
-      <div className="bg-slate-800 rounded-xl border border-slate-700 p-6 space-y-4">
-        <h3 className="text-lg font-semibold text-slate-100">OCR</h3>
+      <div className="bg-slate-900 rounded-lg border border-slate-800 p-6 space-y-5">
+        <h3 className="text-base font-semibold text-slate-100">OCR</h3>
 
         <Input
           label="Konfidenz-Schwellenwert (%)"
@@ -72,10 +72,10 @@ export function SettingsPage() {
         </p>
       </div>
 
-      <div className="bg-slate-800 rounded-xl border border-slate-700 p-6 space-y-4">
-        <h3 className="text-lg font-semibold text-slate-100">Backup</h3>
+      <div className="bg-slate-900 rounded-lg border border-slate-800 p-6 space-y-5">
+        <h3 className="text-base font-semibold text-slate-100">Backup</h3>
 
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-3">
           <input
             type="checkbox"
             id="backupEnabled"
@@ -100,10 +100,10 @@ export function SettingsPage() {
         />
       </div>
 
-      <div className="bg-slate-800 rounded-xl border border-slate-700 p-6 space-y-4">
-        <h3 className="text-lg font-semibold text-slate-100">Entwickler</h3>
+      <div className="bg-slate-900 rounded-lg border border-slate-800 p-6 space-y-5">
+        <h3 className="text-base font-semibold text-slate-100">Entwickler</h3>
 
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-3">
           <input
             type="checkbox"
             id="developerMode"

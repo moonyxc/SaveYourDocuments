@@ -69,3 +69,4 @@ models/*.bin
 
 # Crush
 .crush
+crushrc

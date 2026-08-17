@@ -11,33 +11,40 @@ const navItems = [
 
 export function Sidebar() {
   return (
-    <aside className="w-64 bg-slate-800 border-r border-slate-700 flex flex-col">
-      <div className="p-4 border-b border-slate-700">
-        <h1 className="text-xl font-bold text-slate-100">SaveYourDocuments</h1>
+    <aside className="w-64 bg-slate-900 border-r border-slate-800 flex flex-col">
+      <div className="p-5 border-b border-slate-800">
+        <div className="flex items-center gap-3">
+          <div className="w-8 h-8 bg-blue-600 rounded-lg flex items-center justify-center">
+            <svg className="w-4 h-4 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+            </svg>
+          </div>
+          <h1 className="text-base font-semibold text-slate-100">SaveYourDocuments</h1>
+        </div>
       </div>
-      <nav className="flex-1 py-4">
+      <nav className="flex-1 py-4 px-3 space-y-1">
         {navItems.map((item) => (
           <NavLink
             key={item.path}
             to={item.path}
             className={({ isActive }) =>
-              `flex items-center gap-3 px-4 py-3 text-sm font-medium transition-colors ${
+              `flex items-center gap-3 px-3 py-2.5 text-sm font-medium rounded-lg transition-all duration-150 ${
                 isActive
-                  ? 'bg-slate-700 text-blue-400 border-r-2 border-blue-500'
-                  : 'text-slate-400 hover:bg-slate-700/50 hover:text-slate-200'
+                  ? 'bg-blue-600/10 text-blue-400'
+                  : 'text-slate-400 hover:bg-slate-800 hover:text-slate-200'
               }`
             }
           >
-            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d={item.icon} />
+            <svg className="w-5 h-5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d={item.icon} />
             </svg>
             {item.label}
           </NavLink>
         ))}
       </nav>
-      <div className="p-4 border-t border-slate-700">
-        <div className="text-xs text-slate-500">
-          Version 1.0.0
+      <div className="p-4 border-t border-slate-800">
+        <div className="text-xs text-slate-600 font-mono">
+          v1.0.0
         </div>
       </div>
     </aside>

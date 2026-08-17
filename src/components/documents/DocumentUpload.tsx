@@ -51,36 +51,40 @@ export function DocumentUpload({ onUpload, isProcessing }: DocumentUploadProps) 
 
   return (
     <div
-      className={`border-2 border-dashed rounded-xl p-8 text-center transition-colors ${
+      className={`border-2 border-dashed rounded-xl p-10 text-center transition-all duration-200 ${
         isDragging
-          ? 'border-blue-500 bg-blue-500/10'
-          : 'border-slate-600 hover:border-slate-500'
+          ? 'border-blue-500 bg-blue-500/5'
+          : 'border-slate-700 hover:border-slate-600 bg-slate-900/50'
       }`}
       onDragOver={handleDragOver}
       onDragLeave={handleDragLeave}
       onDrop={handleDrop}
     >
-      <svg
-        className="w-12 h-12 text-slate-500 mx-auto mb-4"
-        fill="none"
-        stroke="currentColor"
-        viewBox="0 0 24 24"
-      >
-        <path
-          strokeLinecap="round"
-          strokeLinejoin="round"
-          strokeWidth={2}
-          d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"
-        />
-      </svg>
-      <p className="text-slate-300 mb-2">
+      <div className={`w-14 h-14 rounded-xl flex items-center justify-center mx-auto mb-4 transition-colors ${
+        isDragging ? 'bg-blue-500/20' : 'bg-slate-800'
+      }`}>
+        <svg
+          className={`w-7 h-7 transition-colors ${isDragging ? 'text-blue-400' : 'text-slate-500'}`}
+          fill="none"
+          stroke="currentColor"
+          viewBox="0 0 24 24"
+        >
+          <path
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            strokeWidth={1.5}
+            d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"
+          />
+        </svg>
+      </div>
+      <p className="text-slate-300 text-sm mb-1">
         Dateien hierher ziehen oder
       </p>
-      <Button type="button" onClick={handleFileSelect} disabled={isProcessing}>
+      <Button type="button" onClick={handleFileSelect} disabled={isProcessing} variant="secondary" size="sm">
         {isProcessing ? 'Verarbeitung...' : 'Dateien auswählen'}
       </Button>
-      <p className="text-xs text-slate-500 mt-4">
-        Unterstützte Formate: JPG, PNG, PDF, TIFF, BMP
+      <p className="text-xs text-slate-600 mt-4 font-mono">
+        JPG, PNG, PDF, TIFF, BMP
       </p>
     </div>
   );

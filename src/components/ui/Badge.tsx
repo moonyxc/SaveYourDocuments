@@ -7,12 +7,12 @@ interface BadgeProps {
 
 export function Badge({ children, color = 'blue' }: BadgeProps) {
   const colors = {
-    blue: 'bg-blue-500/20 text-blue-400 border-blue-500/30',
-    green: 'bg-green-500/20 text-green-400 border-green-500/30',
-    red: 'bg-red-500/20 text-red-400 border-red-500/30',
-    yellow: 'bg-yellow-500/20 text-yellow-400 border-yellow-500/30',
-    gray: 'bg-gray-500/20 text-gray-400 border-gray-500/30',
-    purple: 'bg-purple-500/20 text-purple-400 border-purple-500/30',
+    blue: 'bg-blue-500/10 text-blue-400 border-blue-500/20',
+    green: 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20',
+    red: 'bg-red-500/10 text-red-400 border-red-500/20',
+    yellow: 'bg-amber-500/10 text-amber-400 border-amber-500/20',
+    gray: 'bg-slate-500/10 text-slate-400 border-slate-500/20',
+    purple: 'bg-violet-500/10 text-violet-400 border-violet-500/20',
   };
 
   return (

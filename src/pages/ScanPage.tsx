@@ -111,30 +111,30 @@ export function ScanPage() {
 
   return (
     <div className="space-y-6">
-      <div className="bg-slate-800 rounded-xl border border-slate-700 p-6">
-        <h3 className="text-lg font-semibold text-slate-100 mb-4">Dokument scannen</h3>
+      <div className="bg-slate-900 rounded-lg border border-slate-800 p-6">
+        <h3 className="text-base font-semibold text-slate-100 mb-4">Dokument scannen</h3>
         <DocumentUpload onUpload={handleUpload} isProcessing={isProcessing} />
       </div>
 
       {isProcessing && (
-        <div className="flex flex-col items-center justify-center py-12 gap-3">
+        <div className="flex flex-col items-center justify-center py-12 gap-4">
           <LoadingSpinner text="OCR läuft..." />
-          <div className="w-64 bg-slate-700 rounded-full h-2">
+          <div className="w-64 bg-slate-800 rounded-full h-1.5 overflow-hidden">
             <div
-              className="bg-blue-500 h-2 rounded-full transition-all duration-300"
+              className="bg-blue-500 h-1.5 rounded-full transition-all duration-300"
               style={{ width: `${progress}%` }}
             />
           </div>
-          <p className="text-sm text-slate-400">{Math.round(progress)}%</p>
+          <p className="text-xs text-slate-500 font-mono">{Math.round(progress)}%</p>
         </div>
       )}
 
       {!visionStatus.downloaded && (
-        <div className="bg-amber-500/10 border border-amber-500/30 rounded-xl p-4">
+        <div className="bg-amber-500/5 border border-amber-500/20 rounded-lg p-4">
           <div className="flex items-center justify-between">
             <div>
               <p className="text-sm font-medium text-amber-400">Vision-Modell nicht heruntergeladen</p>
-              <p className="text-sm text-amber-400/80 mt-1">
+              <p className="text-sm text-amber-400/70 mt-1">
                 Für bessere OCR-Ergebnisse kann das Vision-Modell heruntergeladen werden (ca. 6 GB).
               </p>
             </div>

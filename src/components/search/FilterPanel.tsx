@@ -21,7 +21,7 @@ export function FilterPanel({ categories, companies, filters, onFilterChange, on
     typeof filters.isPaid === 'boolean' ? String(filters.isPaid) : '';
 
   return (
-    <div className="bg-slate-800 rounded-xl border border-slate-700 p-4 space-y-4">
+    <div className="bg-slate-900 rounded-lg border border-slate-800 p-4 space-y-4">
       <div className="flex items-center justify-between">
         <h3 className="text-sm font-medium text-slate-200">Filter</h3>
         <Button type="button" onClick={onClear} variant="ghost" size="sm">

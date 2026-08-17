@@ -64,11 +64,11 @@ export function ValidationModal({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center">
-      <div className="absolute inset-0 bg-black/60" onClick={onClose} />
-      <div className="relative bg-slate-800 rounded-xl shadow-xl w-full max-w-lg mx-4 max-h-[90vh] overflow-hidden flex flex-col">
-        <div className="flex items-center justify-between px-6 py-4 border-b border-slate-700">
+      <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" onClick={onClose} />
+      <div className="relative bg-slate-900 rounded-xl shadow-2xl border border-slate-800 w-full max-w-lg mx-4 max-h-[90vh] overflow-hidden flex flex-col">
+        <div className="flex items-center justify-between px-6 py-4 border-b border-slate-800">
           <h2 className="text-lg font-semibold text-slate-100">Dokument validieren</h2>
-          <button type="button" onClick={onClose} className="text-slate-400 hover:text-slate-200">
+          <button type="button" onClick={onClose} className="text-slate-500 hover:text-slate-300 transition-colors">
             <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
             </svg>
@@ -76,11 +76,11 @@ export function ValidationModal({
         </div>
 
         <form onSubmit={handleSubmit} className="px-6 py-4 overflow-y-auto flex-1 space-y-4">
-          <div className="flex items-center gap-2 mb-4">
+          <div className="flex items-center gap-3 mb-2">
             <Badge color={ocrSource === 'vision_fallback' ? 'purple' : 'blue'}>
               {ocrSource === 'vision_fallback' ? 'Vision OCR' : 'Tesseract OCR'}
             </Badge>
-            <span className="text-sm text-slate-400">
+            <span className="text-xs text-slate-500 font-mono">
               Konfidenz: {ocrConfidence.toFixed(1)}%
             </span>
           </div>
@@ -157,7 +157,7 @@ export function ValidationModal({
           </div>
         </form>
 
-        <div className="flex items-center justify-end gap-3 px-6 py-4 border-t border-slate-700">
+        <div className="flex items-center justify-end gap-3 px-6 py-4 border-t border-slate-800">
           <Button type="button" onClick={onSkip} variant="ghost" size="sm">
             Überspringen
           </Button>

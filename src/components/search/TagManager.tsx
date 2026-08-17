@@ -59,7 +59,7 @@ export function TagManager({ tags, selectedTags, onTagSelect, onTagCreate, onTag
                 type="button"
                 onClick={() => onTagDelete(tag.id)}
                 aria-label={`Tag ${tag.name} löschen`}
-                className="text-slate-500 hover:text-red-400"
+                className="text-slate-500 hover:text-red-400 transition-colors"
               >
                 <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />

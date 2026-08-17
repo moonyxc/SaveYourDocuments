@@ -42,8 +42,8 @@ export function LinkDocumentsModal({
     <Modal isOpen={isOpen} onClose={onClose} title="Dokumente verknüpfen" size="md">
       <div className="space-y-4">
         <div>
-          <label className="text-xs text-slate-500">Quelldokument</label>
-          <p className="text-sm text-slate-200">{sourceDocument.originalFilename}</p>
+          <label className="text-xs text-slate-500 uppercase tracking-wider">Quelldokument</label>
+          <p className="text-sm text-slate-200 mt-1">{sourceDocument.originalFilename}</p>
         </div>
 
         <Select

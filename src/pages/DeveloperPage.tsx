@@ -29,8 +29,8 @@ export function DeveloperPage() {
   if (!isAuthenticated) {
     return (
       <div className="max-w-md mx-auto mt-12">
-        <div className="bg-slate-800 rounded-xl border border-slate-700 p-6">
-          <h3 className="text-lg font-semibold text-slate-100 mb-4">Entwickler-Zugang</h3>
+        <div className="bg-slate-900 rounded-lg border border-slate-800 p-6">
+          <h3 className="text-base font-semibold text-slate-100 mb-4">Entwickler-Zugang</h3>
           <form onSubmit={handleLogin} className="space-y-4">
             <Input
               type="password"
@@ -50,9 +50,9 @@ export function DeveloperPage() {
 
   return (
     <div className="space-y-6">
-      <div className="bg-slate-800 rounded-xl border border-slate-700 p-6">
-        <h3 className="text-lg font-semibold text-slate-100 mb-4">Entwickler-Tools</h3>
-        <div className="space-y-4">
+      <div className="bg-slate-900 rounded-lg border border-slate-800 p-6">
+        <h3 className="text-base font-semibold text-slate-100 mb-4">Entwickler-Tools</h3>
+        <div className="space-y-3">
           <Button type="button" variant="secondary" size="sm">
             Logs anzeigen
           </Button>
@@ -65,9 +65,9 @@ export function DeveloperPage() {
         </div>
       </div>
 
-      <div className="bg-slate-800 rounded-xl border border-slate-700 p-6">
-        <h3 className="text-lg font-semibold text-slate-100 mb-4">Audit-Log</h3>
-        <div className="text-sm text-slate-400">
+      <div className="bg-slate-900 rounded-lg border border-slate-800 p-6">
+        <h3 className="text-base font-semibold text-slate-100 mb-4">Audit-Log</h3>
+        <div className="text-sm text-slate-500">
           Keine Einträge vorhanden
         </div>
       </div>
