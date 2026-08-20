@@ -540,6 +540,49 @@ export function registerIpcHandlers(context: IpcContext): void {
     }
     return { success: true };
   });
+
+  ipcMain.handle('db:categories:list', async () => {
+    const locked = requireUnlocked();
+    if (locked) return [];
+    try {
+      return db.all('SELECT * FROM categories ORDER BY name');
+    } catch (error) {
+      return { success: false, error: error instanceof Error ? error.message : 'Unknown error' };
+    }
+  });
+
+  ipcMain.handle('db:companies:list', async () => {
+    const locked = requireUnlocked();
+    if (locked) return [];
+    try {
+      return db.all('SELECT * FROM companies ORDER BY name');
+    } catch (error) {
+      return { success: false, error: error instanceof Error ? error.message : 'Unknown error' };
+    }
+  });
+
+  ipcMain.handle('db:tags:list', async () => {
+    const locked = requireUnlocked();
+    if (locked) return [];
+    try {
+      return db.all('SELECT * FROM tags ORDER BY name');
+    } catch (error) {
+      return { success: false, error: error instanceof Error ? error.message : 'Unknown error' };
+    }
+  });
+
+  ipcMain.handle('db:documents:findByHash', async (_event, { fileHash }: { fileHash: string }) => {
+    const locked = requireUnlocked();
+    if (locked) return locked;
+    try {
+      if (typeof fileHash !== 'string' || !fileHash) {
+        return { success: false, error: 'fileHash fehlt' };
+      }
+      return db.get('SELECT * FROM documents WHERE file_hash = ?', [fileHash]);
+    } catch (error) {
+      return { success: false, error: error instanceof Error ? error.message : 'Unknown error' };
+    }
+  });
 }
 
 export function setLogger(loggerService: LoggerService): void {
