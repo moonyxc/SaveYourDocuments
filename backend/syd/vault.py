@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import base64
 import hashlib
+import hmac
 import os
 import re
 import secrets
@@ -415,6 +416,12 @@ class Vault:
             self._conn.execute("PRAGMA wal_checkpoint(TRUNCATE)")
             self._conn.execute(f"PRAGMA rekey = {_key_pragma_value(new_key)}")
             self._key = new_key
+
+    def key_matches(self, candidate: Key) -> bool:
+        """Prueft eine erneute Eingabe gegen den aktiven Schluessel (zeitkonstant)."""
+        a = self._key if isinstance(self._key, bytes) else self._key.encode()
+        b = candidate if isinstance(candidate, bytes) else candidate.encode()
+        return hmac.compare_digest(a, b)
 
     # --- Dokumente ----------------------------------------------------------
 
