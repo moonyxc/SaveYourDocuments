@@ -4,6 +4,7 @@ import pytest
 import sqlcipher3
 
 from syd.vault import (
+    MIGRATIONS,
     Vault,
     VaultMissingError,
     WrongKeyError,
@@ -152,6 +153,6 @@ def test_backup_opens_with_same_key_and_refuses_overwrite(path, tmp_path):
 def test_migration_version(path):
     key = generate_key()
     with Vault.open(path, key, create=True) as v:
-        assert v.schema_version == 1
+        assert v.schema_version == len(MIGRATIONS)
     with Vault.open(path, key) as v:
-        assert v.schema_version == 1
+        assert v.schema_version == len(MIGRATIONS)
