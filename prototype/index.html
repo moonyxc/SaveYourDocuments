@@ -1,0 +1,417 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Save Your Documents – Klickprototyp (M0b)</title>
+<style>
+/* Tokens aus DESIGN.md. Abweichungen sind mit "KORREKTUR" markiert (PLAN.md 4.8.1) */
+:root{
+  --bg-primary:#0a0f1c; --bg-secondary:#111827; --bg-tertiary:#1f2937; --bg-hover:#374151;
+  --border-primary:#1f2937; --border-secondary:#374151;
+  --text-primary:#f9fafb; --text-secondary:#d1d5db; --text-muted:#9ca3af;
+  --accent-primary:#3b82f6; --accent-hover:#2563eb; --accent-muted:#1e40af;
+  --accent-text:#60a5fa;            /* KORREKTUR: Akzent als Text auf dunklem Grund (6.98:1) */
+  --btn-primary:#2563eb;            /* KORREKTUR: weiss darauf 5.17:1 */
+  --btn-danger:#b91c1c;             /* KORREKTUR: weiss darauf 6.47:1 */
+  --success:#10b981; --warning:#f59e0b; --error:#ef4444;
+  --error-text:#f87171;             /* KORREKTUR: Fehlertext (6.41:1 auf Karten) */
+  --info:#a78bfa;                   /* KORREKTUR: 6.52:1 statt 4.19:1 */
+  --font:'Inter',-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;
+  --mono:'JetBrains Mono','Fira Code',Consolas,monospace;
+  --fs:16px;                        /* KORREKTUR: 16 px Grundschrift, einstellbar */
+}
+*{box-sizing:border-box}
+html{font-size:var(--fs)}
+body{margin:0;background:var(--bg-primary);color:var(--text-secondary);font-family:var(--font);line-height:1.5}
+button,input,select{font:inherit;color:inherit}
+:focus-visible{outline:2px solid var(--accent-primary);outline-offset:2px}
+.app{display:grid;grid-template-columns:16rem 1fr;grid-template-rows:3.5rem 1fr;min-height:100vh}
+header{grid-column:1/3;display:flex;align-items:center;gap:1rem;padding:0 1.5rem;background:var(--bg-secondary);border-bottom:1px solid var(--border-primary)}
+header .brand{width:13rem;font-weight:700;color:var(--text-primary)}
+.search{flex:1;max-width:36rem;position:relative}
+.search input{width:100%;height:2.5rem;padding:0 .75rem 0 2.25rem;background:var(--bg-tertiary);border:1px solid var(--border-secondary);border-radius:.375rem;color:var(--text-primary)}
+.search input::placeholder{color:var(--text-muted)}   /* KORREKTUR: muted statt faint */
+.search svg{position:absolute;left:.7rem;top:.7rem;width:1.1rem;height:1.1rem;color:var(--text-muted)}
+.status{margin-left:auto;display:flex;align-items:center;gap:.5rem;font-size:.875rem;color:var(--text-muted)}
+.dot{width:.6rem;height:.6rem;border-radius:50%;background:var(--success)}
+nav{background:var(--bg-secondary);border-right:1px solid var(--border-primary);padding:1rem 0}
+nav button{display:flex;align-items:center;gap:.75rem;width:100%;min-height:2.75rem;padding:0 1.25rem;background:none;border:0;border-right:2px solid transparent;color:var(--text-secondary);cursor:pointer;text-align:left;transition:background .15s}
+nav button:hover{background:var(--bg-tertiary)}
+nav button[aria-current=page]{background:var(--accent-muted);color:#fff;border-right-color:var(--accent-primary);font-weight:600} /* KORREKTUR: weisser Text (8.72:1) */
+nav svg{width:1.25rem;height:1.25rem;flex:none}
+nav .count{margin-left:auto;font-family:var(--mono);font-size:.75rem;background:var(--bg-hover);color:var(--text-primary);border-radius:999px;padding:.1rem .5rem}
+nav .sep{height:1px;background:var(--border-primary);margin:.75rem 1.25rem}
+main{padding:1.5rem;max-width:80rem;width:100%;margin:0 auto}
+h1{font-size:1.25rem;font-weight:700;color:var(--text-primary);margin:0 0 .25rem}
+h2{font-size:1.125rem;font-weight:600;color:var(--text-primary);margin:0 0 .75rem}
+.lead{margin:0 0 1.5rem;color:var(--text-muted)}
+.card{background:var(--bg-secondary);border:1px solid var(--border-primary);border-radius:.5rem;padding:1.25rem;transition:border-color .2s}
+.card:hover{border-color:var(--border-secondary)}
+.grid{display:grid;gap:1rem}
+.g3{grid-template-columns:repeat(3,1fr)}
+.g2{grid-template-columns:1fr 1fr}
+@media(max-width:60rem){.app{grid-template-columns:1fr}nav{display:none}.g3,.g2{grid-template-columns:1fr}header .brand{width:auto}}
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:.5rem;min-height:2.75rem;padding:0 1rem;border:0;border-radius:.375rem;font-weight:500;cursor:pointer;transition:background .15s}
+.btn.primary{background:var(--btn-primary);color:#fff}.btn.primary:hover{background:var(--accent-muted)}
+.btn.secondary{background:var(--bg-tertiary);color:var(--text-secondary)}.btn.secondary:hover{background:var(--bg-hover)}
+.btn.danger{background:var(--btn-danger);color:#fff}
+.btn.ghost{background:none;color:var(--text-secondary)}.btn.ghost:hover{background:var(--bg-tertiary)}
+.btn[disabled]{opacity:.5;cursor:not-allowed}
+.badge{display:inline-flex;align-items:center;gap:.35rem;font-size:.75rem;font-weight:500;padding:.15rem .6rem;border-radius:999px;border:1px solid;background:var(--bg-tertiary)}
+.b-green{color:var(--success);border-color:#065f46}.b-red{color:var(--error-text);border-color:#7f1d1d}
+.b-yellow{color:var(--warning);border-color:#78350f}.b-blue{color:var(--accent-text);border-color:var(--accent-muted)}
+.b-purple{color:var(--info);border-color:#4c1d95}.b-gray{color:var(--text-muted);border-color:var(--border-secondary)}
+.metric{font-family:var(--mono);font-size:1.875rem;font-weight:700;color:var(--text-primary);line-height:1.2}
+.label{font-size:.75rem;font-weight:500;color:var(--text-muted);text-transform:uppercase;letter-spacing:.05em}
+table{width:100%;border-collapse:collapse}
+th{text-align:left;padding:.5rem 1rem;font-size:.75rem;font-weight:500;color:var(--text-muted);text-transform:uppercase;letter-spacing:.05em}
+td{padding:.75rem 1rem;font-size:.875rem;border-top:1px solid var(--border-primary)}
+tbody tr:hover{background:var(--bg-tertiary)}
+td.num,th.num{text-align:right;font-family:var(--mono)}
+.row{display:flex;align-items:center;gap:.75rem}
+.spread{justify-content:space-between}
+.muted{color:var(--text-muted)}
+.chips{display:flex;flex-wrap:wrap;gap:.5rem;margin:0 0 1rem}
+.chip{min-height:2.25rem;padding:0 .9rem;border-radius:999px;border:1px solid var(--border-secondary);background:none;cursor:pointer;color:var(--text-secondary)}
+.chip[aria-pressed=true]{background:var(--accent-muted);border-color:var(--accent-primary);color:#fff}
+.list{list-style:none;margin:0;padding:0}
+.item{display:flex;align-items:center;gap:1rem;padding:.75rem 0;border-top:1px solid var(--border-primary)}
+.item:first-child{border-top:0}
+.item .grow{flex:1;min-width:0}
+.item strong{color:var(--text-primary);font-weight:600}
+.view{display:none}.view.on{display:block}
+/* Miniatur-Dokumente (Platzhalter fuer Fotos) */
+.paper{aspect-ratio:3/4;background:#e5e7eb;border-radius:.25rem;position:relative;overflow:hidden;color:#374151}
+.paper i{display:block;height:.35rem;margin:.5rem .6rem 0;background:#9ca3af;border-radius:2px}
+.paper i.s{width:55%}.paper i.m{width:80%}
+.paper b{position:absolute;right:.5rem;top:.5rem;font-size:.7rem;font-family:var(--mono);color:#1f2937}
+.paper.big{max-width:26rem;padding:1.5rem}
+.paper.big i{height:.55rem;margin:.7rem 0 0}
+.thumbs{display:grid;grid-template-columns:repeat(auto-fill,minmax(8.5rem,1fr));gap:1rem}
+.thumb{background:none;border:2px solid var(--border-secondary);border-radius:.5rem;padding:.5rem;cursor:pointer;text-align:left}
+.thumb[aria-pressed=true]{border-color:var(--accent-primary);background:var(--accent-muted)}
+.thumb .cap{display:flex;justify-content:space-between;margin-top:.4rem;font-size:.75rem;color:var(--text-secondary)}
+.drop{border:2px dashed var(--border-secondary);border-radius:.75rem;padding:1.5rem;text-align:center;color:var(--text-muted)}
+.drop:hover,.drop.over{border-color:var(--accent-primary);color:var(--text-primary)}
+.groups{display:grid;gap:.75rem;margin-top:1rem}
+.group{display:flex;gap:.75rem;align-items:center;background:var(--bg-tertiary);border-radius:.5rem;padding:.75rem 1rem}
+/* Pruefansicht */
+.review{display:grid;grid-template-columns:minmax(0,1fr) 24rem;gap:1.5rem;align-items:start}
+@media(max-width:60rem){.review{grid-template-columns:1fr}}
+.field{margin-bottom:1rem}
+.field label{display:flex;justify-content:space-between;align-items:center;margin-bottom:.35rem;font-size:.875rem;font-weight:500;color:var(--text-secondary)}
+.field input,.field select{width:100%;height:2.75rem;padding:0 .75rem;background:var(--bg-tertiary);border:1px solid var(--border-secondary);border-radius:.375rem;color:var(--text-primary)}
+.field input.mono{font-family:var(--mono)}
+.field.unsure input,.field.unsure select{border-color:var(--warning);border-width:2px}
+.field.confirmed input,.field.confirmed select{border-color:#065f46}
+.conf{font-size:.75rem;font-family:var(--mono)}
+.hint{font-size:.875rem;color:var(--text-muted);margin-top:.25rem}
+.suggest{border-left:3px solid var(--info);background:var(--bg-tertiary);border-radius:.375rem;padding:.75rem 1rem;margin-bottom:1rem}
+.suggest p{margin:.25rem 0 .75rem}
+/* Zeitleiste */
+.timeline{position:relative;margin-left:.5rem;padding-left:1.5rem;border-left:2px solid var(--border-secondary)}
+.tl{position:relative;margin-bottom:1rem}
+.tl::before{content:"";position:absolute;left:-1.9rem;top:1.1rem;width:.75rem;height:.75rem;border-radius:50%;background:var(--bg-primary);border:2px solid var(--text-muted)}
+.tl.soon::before{border-color:var(--warning);background:var(--warning)}.tl.late::before{border-color:var(--error);background:var(--error)}
+.tl.done{opacity:.6}
+/* Diagramm */
+.bars{display:grid;gap:.6rem}
+.bar{display:grid;grid-template-columns:9rem 1fr 6rem;gap:.75rem;align-items:center;font-size:.875rem}
+.bar .track{height:1.25rem;background:var(--bg-tertiary);border-radius:.25rem;overflow:hidden}
+.bar .fill{height:100%;background:var(--accent-primary);border-radius:.25rem}
+.bar .v{font-family:var(--mono);text-align:right;color:var(--text-primary)}
+.yearcols{display:flex;align-items:flex-end;gap:1.25rem;height:11rem;padding-top:1rem;border-bottom:1px solid var(--border-secondary)}
+.yc{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:flex-end;height:100%;gap:.35rem;font-family:var(--mono);font-size:.75rem}
+.yc div{width:100%;background:var(--accent-primary);border-radius:.25rem .25rem 0 0;min-height:2px}
+.yc.cur div{background:var(--accent-text)}
+/* Modal */
+.overlay{position:fixed;inset:0;background:rgba(0,0,0,.7);backdrop-filter:blur(4px);display:none;align-items:center;justify-content:center;padding:1rem;z-index:10}
+.overlay.on{display:flex}
+.modal{background:var(--bg-secondary);border:1px solid var(--border-primary);border-radius:.75rem;box-shadow:0 25px 50px -12px rgba(0,0,0,.6);max-width:32rem;width:100%;max-height:90vh;overflow:auto;padding:1.5rem}
+.modal .actions{display:flex;gap:.75rem;justify-content:flex-end;margin-top:1.25rem;flex-wrap:wrap}
+.toast{position:fixed;bottom:1.5rem;left:50%;transform:translateX(-50%);background:var(--bg-tertiary);border:1px solid var(--border-secondary);color:var(--text-primary);padding:.75rem 1.25rem;border-radius:.5rem;display:none;z-index:20}
+.toast.on{display:block}
+.empty{text-align:center;padding:2rem;color:var(--text-muted)}
+.sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0)}
+@media (prefers-reduced-motion:reduce){*{transition:none!important}}
+</style>
+</head>
+<body>
+<div class="app">
+  <header>
+    <div class="brand">Save Your Documents</div>
+    <div class="search" role="search">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
+      <label class="sr" for="q">Dokumente durchsuchen</label>
+      <input id="q" type="search" placeholder="Firma, Betrag oder Stichwort suchen" autocomplete="off">
+    </div>
+    <div class="status" title="Das Programm läuft im Hintergrund und empfängt Dokumente vom Handy"><span class="dot"></span><span>Empfangsbereit · „PC Wohnzimmer“</span></div>
+  </header>
+
+  <nav aria-label="Hauptmenü" id="nav"></nav>
+
+  <main>
+    <!-- START -->
+    <section class="view" id="v-start">
+      <h1>Guten Morgen, Nils</h1>
+      <p class="lead">Das ist heute zu tun. Alles andere ist erledigt.</p>
+      <div class="grid g3">
+        <div class="card"><div class="label">Neu eingegangen</div><div class="metric" id="m-new">3</div><p class="muted">Fotos vom Handy warten auf dich.</p><button class="btn primary" data-go="import">Fotos sortieren</button></div>
+        <div class="card"><div class="label">Zu prüfen</div><div class="metric" id="m-check">2</div><p class="muted">Erkannte Dokumente, die du bestätigen musst.</p><button class="btn primary" data-go="review">Jetzt prüfen</button></div>
+        <div class="card"><div class="label">Bald fällig</div><div class="metric" id="m-due">3</div><p class="muted">Rechnungen und Kündigungsfristen in den nächsten 30 Tagen.</p><button class="btn secondary" data-go="fristen">Fristen ansehen</button></div>
+      </div>
+      <div class="card" style="margin-top:1rem">
+        <div class="row spread"><h2>Zuletzt geprüft</h2><button class="btn ghost" data-go="docs">Alle Dokumente</button></div>
+        <ul class="list" id="recent"></ul>
+      </div>
+    </section>
+
+    <!-- IMPORT -->
+    <section class="view" id="v-import">
+      <h1>Neue Fotos sortieren</h1>
+      <p class="lead">Wähle Fotos aus, die zu einem Dokument gehören, und fasse sie zusammen. Seiten eines Briefs kommen so zusammen in eine Akte.</p>
+      <div class="drop" id="drop"><strong>Dateien hierher ziehen</strong> oder <button class="btn secondary" id="pick">Dateien auswählen</button><div class="hint">Fotos und PDFs. Vom Handy: in der LocalSend-App „Save Your Documents“ als Empfänger wählen.</div></div>
+      <div class="card" style="margin-top:1rem">
+        <div class="row spread"><h2>Von „Pixel 8 von Nils“ · 5 Fotos</h2><span class="badge b-green">Gerät vertraut</span></div>
+        <div class="thumbs" id="thumbs"></div>
+        <div class="row" style="margin-top:1rem;flex-wrap:wrap">
+          <button class="btn primary" id="group" disabled>Auswahl zu einem Dokument zusammenfassen</button>
+          <button class="btn ghost" id="ungroup" disabled>Auswahl einzeln lassen</button>
+          <span class="muted" id="selinfo">Noch nichts ausgewählt.</span>
+        </div>
+        <div class="groups" id="groups"></div>
+        <div class="row" style="margin-top:1.25rem"><button class="btn primary" id="start" disabled>Erkennung starten</button><span class="muted" id="startinfo">Sortiere zuerst alle Fotos.</span></div>
+      </div>
+    </section>
+
+    <!-- PRUEFEN -->
+    <section class="view" id="v-review">
+      <div class="row spread"><div><h1>Dokument prüfen</h1><p class="lead" id="rv-count"></p></div>
+        <div class="row"><button class="btn ghost" id="prev">‹ Zurück</button><button class="btn ghost" id="next">Weiter ›</button></div></div>
+      <div id="rv-empty" class="card empty" hidden><h2>Alles geprüft</h2><p>Es wartet kein Dokument mehr auf dich.</p><button class="btn primary" data-go="start">Zur Startseite</button></div>
+      <div class="review" id="rv-body">
+        <div class="card"><div class="row spread" style="margin-bottom:1rem"><span class="label" id="rv-pages"></span><span class="badge b-gray">Original unverändert gespeichert</span></div><div class="paper big" id="rv-paper"></div></div>
+        <div>
+          <div class="card" id="rv-form"></div>
+          <div class="suggest" id="rv-link" hidden>
+            <strong>Gehört das zusammen?</strong>
+            <p id="rv-link-text"></p>
+            <div class="row"><button class="btn secondary" id="link-yes">Ja, verknüpfen</button><button class="btn ghost" id="link-no">Nein</button></div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- DOKUMENTE -->
+    <section class="view" id="v-docs">
+      <h1>Alle Dokumente</h1><p class="lead" id="docs-lead"></p>
+      <div class="chips" id="chips" role="group" aria-label="Filter"></div>
+      <div class="card" style="padding:0;overflow:auto"><table><thead><tr><th>Dokument</th><th>Bereich</th><th>Datum</th><th class="num">Betrag</th><th>Status</th></tr></thead><tbody id="docrows"></tbody></table><div class="empty" id="docs-empty" hidden>Nichts gefunden. Probiere einen anderen Suchbegriff oder nimm einen Filter heraus.</div></div>
+    </section>
+
+    <!-- FRISTEN -->
+    <section class="view" id="v-fristen">
+      <h1>Fristen</h1><p class="lead">Zahlungen und Kündigungen in zeitlicher Reihenfolge. Erinnerungen kommen als Benachrichtigung.</p>
+      <div class="timeline" id="timeline"></div>
+    </section>
+
+    <!-- AUSWERTUNG -->
+    <section class="view" id="v-stats">
+      <div class="row spread"><div><h1>Auswertung</h1><p class="lead">Nur geprüfte Dokumente, alle Beträge in Euro.</p></div>
+        <div class="row"><label class="muted" for="year">Jahr</label><select id="year" class="btn secondary" style="padding:0 .75rem"></select><button class="btn secondary" id="csv">Als CSV speichern</button></div></div>
+      <div class="grid g3" id="kpis"></div>
+      <div class="grid g2" style="margin-top:1rem">
+        <div class="card"><h2>Ausgaben pro Firma</h2><div class="bars" id="by-company"></div></div>
+        <div class="card"><h2>Ausgaben pro Bereich</h2><div class="bars" id="by-area"></div></div>
+      </div>
+      <div class="card" style="margin-top:1rem"><h2>Ausgaben pro Jahr</h2><div class="yearcols" id="by-year"></div></div>
+      <div class="card" style="margin-top:1rem;padding:0;overflow:auto"><table><thead><tr><th>Firma</th><th>Bereich</th><th class="num">Dokumente</th><th class="num">Summe</th></tr></thead><tbody id="stat-rows"></tbody></table></div>
+    </section>
+
+    <!-- EINSTELLUNGEN -->
+    <section class="view" id="v-settings">
+      <h1>Einstellungen</h1><p class="lead">Wenige Schalter, sinnvolle Voreinstellungen.</p>
+      <div class="grid g2">
+        <div class="card"><h2>Anzeige</h2>
+          <div class="field"><label for="fsz">Schriftgröße</label><select id="fsz"><option value="16">Normal (16)</option><option value="18">Groß (18)</option><option value="14">Dicht (14)</option></select></div>
+          <div class="field"><label><span>Metadaten im Namen anzeigen</span></label><button class="chip" aria-pressed="true" id="meta-name">An</button><div class="hint" id="name-demo">Beispiel: Telekom_Rechnung_2026-09_49,99 €.pdf</div></div>
+        </div>
+        <div class="card"><h2>Sicherheit</h2>
+          <p>Dein Archiv ist verschlüsselt und nur auf diesem Windows-Konto lesbar.</p>
+          <div class="row" style="flex-wrap:wrap"><button class="btn secondary">Wiederherstellungsschlüssel anzeigen</button><button class="btn secondary">Passwort festlegen</button><button class="btn secondary">Datei sichern unter …</button></div>
+          <p class="hint">Mit Passwort fragt das Programm bei jedem Start danach. Empfang und Erinnerungen laufen erst danach.</p></div>
+      </div>
+    </section>
+  </main>
+</div>
+
+<div class="overlay" id="ov" role="dialog" aria-modal="true" aria-labelledby="ov-title"><div class="modal" id="ov-body"></div></div>
+<div class="toast" id="toast" role="status"></div>
+
+<script>
+const $=s=>document.querySelector(s), $$=s=>[...document.querySelectorAll(s)];
+const eur=n=>n.toLocaleString('de-DE',{style:'currency',currency:'EUR'});
+const dat=s=>new Date(s+'T00:00').toLocaleDateString('de-DE',{day:'2-digit',month:'2-digit',year:'numeric'});
+const TODAY=new Date('2026-10-28T00:00');
+const days=s=>Math.round((new Date(s+'T00:00')-TODAY)/864e5);
+const esc=s=>String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+
+const icons={start:'<path d="M3 11 12 3l9 8v9a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1z"/>',
+ import:'<path d="M12 3v12m0 0-4-4m4 4 4-4M4 17v3h16v-3"/>',review:'<path d="m5 12 5 5 9-10"/>',
+ docs:'<path d="M7 3h8l4 4v14H7zM15 3v4h4"/>',fristen:'<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/>',
+ stats:'<path d="M4 20V10m6 10V4m6 16v-7m4 7H2"/>',settings:'<circle cx="12" cy="12" r="3"/><path d="M12 2v3m0 14v3M2 12h3m14 0h3M5 5l2 2m10 10 2 2M19 5l-2 2M7 17l-2 2"/>'};
+const state={view:'start',filter:new Set(),q:'',year:'2026',metaName:true,
+ batch:[{id:1,t:'Brief Seite 1'},{id:2,t:'Brief Seite 2'},{id:3,t:'Rechnung'},{id:4,t:'Kassenbon'},{id:5,t:'Brief Seite 3'}],sel:new Set(),groups:[],grouped:new Set(),
+ docs:[
+  {id:1,firma:'Telekom',art:'Rechnung',bereich:'Telefon & Internet',datum:'2026-09-30',betrag:49.99,bezahlt:false,faellig:'2026-11-04',geprueft:true},
+  {id:2,firma:'Allianz',art:'Beitragsrechnung',bereich:'Versicherung',datum:'2026-08-15',betrag:312.40,bezahlt:true,geprueft:true},
+  {id:3,firma:'MediaMarkt',art:'Kaufbeleg',bereich:'Elektronik',datum:'2026-05-03',betrag:649.00,bezahlt:true,geprueft:true},
+  {id:4,firma:'Stadtwerke',art:'Jahresabrechnung',bereich:'Strom & Gas',datum:'2025-12-20',betrag:1184.20,bezahlt:true,geprueft:true},
+  {id:5,firma:'Allianz',art:'Beitragsrechnung',bereich:'Versicherung',datum:'2025-08-14',betrag:298.10,bezahlt:true,geprueft:true},
+  {id:6,firma:'Finanzamt',art:'Bescheid',bereich:'Steuern',datum:'2026-07-02',betrag:420.00,bezahlt:true,geprueft:true},
+  {id:7,firma:'Telekom',art:'Rechnung',bereich:'Telefon & Internet',datum:'2026-08-31',betrag:49.99,bezahlt:true,geprueft:true},
+  {id:8,firma:'IKEA',art:'Kaufbeleg',bereich:'Haushalt',datum:'2024-03-11',betrag:238.50,bezahlt:true,geprueft:true}],
+ queue:[
+  {id:101,firma:'Allianz',firmaNeu:false,art:'Kündigungsbestätigung',bereich:'Versicherung',datum:'2026-10-12',betrag:null,
+   conf:{firma:.97,art:.71,datum:.93,betrag:0},frist:{typ:'Vertragsende',datum:'2027-01-01',conf:.62},link:'Allianz · Beitragsrechnung vom 15.08.2026 (gleiche Versicherungsscheinnummer VS-4481-20)',pages:2},
+  {id:102,firma:'Elektro Brandt GmbH',firmaNeu:true,art:'Rechnung',bereich:'Handwerker',datum:'2026-10-20',betrag:186.73,
+   conf:{firma:.58,art:.9,datum:.88,betrag:.95},frist:{typ:'Zahlungsziel',datum:'2026-11-03',conf:.9},link:null,pages:1}],
+ qi:0,
+ fristen:[
+  {id:1,doc:'Telekom · Rechnung 49,99 €',typ:'Zahlung',datum:'2026-11-04',erledigt:false},
+  {id:2,doc:'Stadtwerke · Vertrag Strom, Kündigung bis',typ:'Kündigung',datum:'2026-11-27',erledigt:false},
+  {id:3,doc:'Allianz · Hausrat, Verlängerung',typ:'Vertrag',datum:'2027-01-01',erledigt:false,wieder:'jährlich'},
+  {id:4,doc:'Finanzamt · Vorauszahlung',typ:'Zahlung',datum:'2026-10-10',erledigt:true}]};
+state.docs.forEach(d=>d.name=`${d.firma}_${d.art}_${d.datum.slice(0,7)}_${d.betrag.toFixed(2).replace('.',',')} €.pdf`);
+
+function toast(t){const e=$('#toast');e.textContent=t;e.classList.add('on');clearTimeout(toast.h);toast.h=setTimeout(()=>e.classList.remove('on'),2600)}
+function modal(html){const o=$('#ov');$('#ov-body').innerHTML=html;o.classList.add('on');const b=o.querySelector('button');b&&b.focus()}
+function closeModal(){$('#ov').classList.remove('on')}
+document.addEventListener('keydown',e=>{if(e.key==='Escape')closeModal()});
+$('#ov').addEventListener('click',e=>{if(e.target.id==='ov')closeModal()});
+
+const views=[['start','Start'],['import','Neue Fotos'],['review','Prüfen'],['docs','Dokumente'],['fristen','Fristen'],['stats','Auswertung'],['settings','Einstellungen']];
+function counts(){return {import:state.batch.filter(b=>!state.started).length,review:state.queue.length,fristen:openFristen().length}}
+function openFristen(){return state.fristen.filter(f=>!f.erledigt&&days(f.datum)<=30)}
+function renderNav(){const c=counts();$('#nav').innerHTML=views.map(([k,t],i)=>(i===3?'<div class="sep"></div>':'')+
+ `<button data-go="${k}" ${state.view===k?'aria-current="page"':''}><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${icons[k]}</svg>${t}${c[k]?`<span class="count">${c[k]}</span>`:''}</button>`).join('')}
+function go(v){state.view=v;$$('.view').forEach(e=>e.classList.toggle('on',e.id==='v-'+v));renderNav();({start,import:renderImport,review:renderReview,docs:renderDocs,fristen:renderFristen,stats:renderStats}[v]||(()=>{}))();scrollTo(0,0)}
+document.addEventListener('click',e=>{const g=e.target.closest('[data-go]');if(g)go(g.dataset.go)});
+
+function badgeBezahlt(d){return d.bezahlt?'<span class="badge b-green">✓ Bezahlt</span>':`<span class="badge b-red">● Offen bis ${dat(d.faellig)}</span>`}
+function start(){
+  $('#m-new').textContent=state.started?0:state.batch.length;$('#m-check').textContent=state.queue.length;$('#m-due').textContent=openFristen().length;
+  const r=state.docs.filter(d=>d.geprueft).slice(0,4);
+  $('#recent').innerHTML=r.map(d=>`<li class="item"><div class="grow"><strong>${esc(d.firma)}</strong> · ${esc(d.art)}<div class="muted">${esc(d.bereich)} · ${dat(d.datum)}</div></div><span class="metric" style="font-size:1rem">${eur(d.betrag)}</span>${badgeBezahlt(d)}</li>`).join('')}
+
+/* Import */
+function renderImport(){
+  const free=state.batch.filter(b=>!state.grouped.has(b.id));
+  $('#thumbs').innerHTML=free.map(b=>`<button class="thumb" data-id="${b.id}" aria-pressed="${state.sel.has(b.id)}"><div class="paper"><b>${b.id}</b><i class="m"></i><i></i><i class="s"></i><i class="m"></i><i></i></div><div class="cap"><span>${esc(b.t)}</span><span>${state.sel.has(b.id)?'✓ gewählt':''}</span></div></button>`).join('')||'<div class="empty" style="grid-column:1/-1">Alle Fotos sind sortiert.</div>';
+  $('#groups').innerHTML=state.groups.map((g,i)=>`<div class="group"><strong>Dokument ${i+1}</strong><span class="muted">${g.length} ${g.length>1?'Seiten':'Seite'}: ${g.map(id=>state.batch.find(b=>b.id===id).t).join(', ')}</span><button class="btn ghost" style="margin-left:auto" data-undo="${i}">Auflösen</button></div>`).join('');
+  const n=state.sel.size;$('#group').disabled=n<2;$('#ungroup').disabled=n<1;
+  $('#selinfo').textContent=n?`${n} ausgewählt`:'Noch nichts ausgewählt.';
+  const done=free.length===0&&state.groups.length>0&&!state.started;$('#start').disabled=!done;
+  $('#startinfo').textContent=state.started?'Erkennung läuft, die Ergebnisse erscheinen unter „Prüfen“.':done?`${state.groups.length} Dokumente bereit.`:'Sortiere zuerst alle Fotos.';
+}
+$('#thumbs').addEventListener('click',e=>{const t=e.target.closest('.thumb');if(!t)return;const id=+t.dataset.id;state.sel.has(id)?state.sel.delete(id):state.sel.add(id);renderImport()});
+function commit(ids){state.groups.push(ids);ids.forEach(i=>state.grouped.add(i));state.sel.clear();renderImport()}
+$('#group').onclick=()=>commit([...state.sel].sort());
+$('#ungroup').onclick=()=>[...state.sel].forEach(id=>{state.groups.push([id]);state.grouped.add(id);state.sel.delete(id);renderImport()});
+$('#groups').addEventListener('click',e=>{const u=e.target.dataset.undo;if(u===undefined)return;const g=state.groups.splice(+u,1)[0];g.forEach(i=>state.grouped.delete(i));renderImport()});
+$('#start').onclick=()=>{state.started=true;toast('Erkennung gestartet');renderImport();renderNav()};
+$('#pick').onclick=()=>toast('Im echten Programm öffnet sich hier der Dateidialog');
+const drop=$('#drop');['dragover','dragenter'].forEach(ev=>drop.addEventListener(ev,e=>{e.preventDefault();drop.classList.add('over')}));
+['dragleave','drop'].forEach(ev=>drop.addEventListener(ev,e=>{e.preventDefault();drop.classList.remove('over');if(ev==='drop')toast('Im echten Programm landen die Dateien jetzt im Stapel')}));
+
+/* Pruefen */
+const pct=c=>Math.round(c*100);
+function confBadge(c,leer){if(leer)return'<span class="badge b-yellow">▲ nicht gefunden</span>';return c>=.85?`<span class="badge b-green conf">✓ sicher ${pct(c)} %</span>`:`<span class="badge b-yellow conf">▲ bitte prüfen ${pct(c)} %</span>`}
+function renderReview(){
+  const q=state.queue,d=q[state.qi];
+  $('#rv-empty').hidden=!!d;$('#rv-body').style.display=d?'':'none';$('#prev').disabled=$('#next').disabled=q.length<2;
+  if(!d){$('#rv-count').textContent='';return}
+  $('#rv-count').textContent=`Dokument ${state.qi+1} von ${q.length}. Gelb markierte Felder sind unsicher.`;
+  $('#rv-pages').textContent=d.pages>1?`${d.pages} Seiten`:'1 Seite';
+  $('#rv-paper').innerHTML=`<b style="position:static;font-size:.9rem;display:block;margin-bottom:1rem">${esc(d.firma)}</b>`+'<i></i><i class="m"></i><i class="s"></i><i></i><i class="m"></i><i class="s"></i><i class="m"></i>';
+  const fld=(k,lbl,val,type='text',mono)=>{const leer=val===null||val==='',c=d.conf[k];const cls=leer||c<.85?'unsure':'';
+   return `<div class="field ${cls}" data-f="${k}"><label for="f-${k}"><span>${lbl}</span>${confBadge(c,leer)}</label><input id="f-${k}" class="${mono?'mono':''}" type="${type}" value="${val??''}" ${leer?'placeholder="Bitte eintragen"':''}></div>`};
+  $('#rv-form').innerHTML=
+   fld('firma','Firma',d.firma)+(d.firmaNeu?`<div class="hint" style="margin:-.5rem 0 1rem">„${esc(d.firma)}“ ist neu. Beim Bestätigen legst du sie an.</div>`:'')+
+   `<div class="field ${d.conf.art<.85?'unsure':''}"><label for="f-art"><span>Art</span>${confBadge(d.conf.art)}</label><select id="f-art">${['Rechnung','Kaufbeleg','Beitragsrechnung','Kündigungsbestätigung','Bescheid','Vertrag','Sonstiges'].map(o=>`<option ${o===d.art?'selected':''}>${o}</option>`).join('')}</select></div>`+
+   `<div class="field"><label for="f-bereich"><span>Bereich</span></label><input id="f-bereich" value="${esc(d.bereich)}"></div>`+
+   fld('datum','Datum',d.datum,'date')+fld('betrag','Betrag in Euro',d.betrag===null?'':String(d.betrag).replace('.',','),'text',true)+
+   (d.frist?`<div class="field ${d.frist.conf<.85?'unsure':''}"><label for="f-frist"><span>${d.frist.typ}</span>${confBadge(d.frist.conf)}</label><input id="f-frist" type="date" value="${d.frist.datum}"><div class="hint">Fristen bestätigst du immer selbst. Erinnerung: ${d.frist.typ==='Zahlungsziel'?'7 und 1 Tag':'30 und 7 Tage'} vorher.</div></div>`:'')+
+   `<div class="row" style="margin-top:1.25rem"><button class="btn primary" id="confirm">Stimmt so, speichern</button><button class="btn ghost" id="skip">Später</button></div>`;
+  $('#rv-link').hidden=!d.link||d.linked!==undefined;$('#rv-link-text').textContent=d.link||'';
+  $('#rv-form').querySelectorAll('input,select').forEach(i=>i.addEventListener('input',()=>i.closest('.field').classList.remove('unsure')));
+  $('#confirm').onclick=()=>d.firmaNeu?newCompany(d):finish(d);
+  $('#skip').onclick=()=>{state.qi=(state.qi+1)%q.length;renderReview()};
+  $('#f-firma')&&$('#f-firma').focus();
+}
+function newCompany(d){const name=$('#f-firma').value.trim();d.firma=name;modal(`<h2 id="ov-title">Neue Firma anlegen?</h2><p>„${esc(name)}“ kennt das Programm noch nicht. Soll es einen neuen Ordner dafür anlegen?</p><div class="actions"><button class="btn ghost" id="m-cancel">Zurück</button><button class="btn secondary" id="m-alias">Ist eine bekannte Firma …</button><button class="btn primary" id="m-create">Ja, Ordner anlegen</button></div>`);
+ $('#m-cancel').onclick=closeModal;$("#m-create").onclick=()=>{closeModal();finish(d,`Ordner „${name}“ angelegt`)};$('#m-alias').onclick=()=>{closeModal();toast('Im echten Programm wählst du hier die vorhandene Firma')}}
+function finish(d,extra){
+  const raw=$('#f-betrag').value.replace(/\./g,'').replace(',','.');
+  state.docs.unshift({id:d.id,firma:$('#f-firma').value,art:$('#f-art').value,bereich:$('#f-bereich').value,datum:$('#f-datum').value||d.datum,betrag:parseFloat(raw)||0,bezahlt:false,faellig:d.frist&&d.frist.datum,geprueft:true,name:'(neu)'});
+  const nd=state.docs[0];nd.name=`${nd.firma}_${nd.art}_${nd.datum.slice(0,7)}_${nd.betrag.toFixed(2).replace('.',',')} €.pdf`;
+  if(d.frist){const fd=$('#f-frist').value;state.fristen.push({id:Date.now(),doc:`${nd.firma} · ${nd.art}`,typ:d.frist.typ==='Zahlungsziel'?'Zahlung':'Vertrag',datum:fd,erledigt:false})}
+  state.queue=state.queue.filter(x=>x!==d);state.qi=0;toast(extra||'Gespeichert. Erinnerungen sind eingerichtet.');renderNav();renderReview()}
+$('#prev').onclick=()=>{state.qi=(state.qi-1+state.queue.length)%state.queue.length;renderReview()};
+$('#next').onclick=()=>{state.qi=(state.qi+1)%state.queue.length;renderReview()};
+$('#link-yes').onclick=()=>{state.queue[state.qi].linked=true;$('#rv-link').hidden=true;toast('Verknüpft')};
+$('#link-no').onclick=()=>{state.queue[state.qi].linked=false;$('#rv-link').hidden=true;toast('Merke ich mir: nicht verknüpft')};
+
+/* Dokumente */
+const CHIPS=['Offen','Bezahlt','2026','Versicherung'];
+function matches(d){const q=state.q.toLowerCase();
+ if(q&&![d.firma,d.art,d.bereich,d.name,String(d.betrag).replace('.',','),d.datum].join(' ').toLowerCase().includes(q))return false;
+ const f=state.filter;return(!f.has('Offen')||!d.bezahlt)&&(!f.has('Bezahlt')||d.bezahlt)&&(!f.has('2026')||d.datum.startsWith('2026'))&&(!f.has('Versicherung')||d.bereich==='Versicherung')}
+function renderDocs(){
+  $('#chips').innerHTML=CHIPS.map(c=>`<button class="chip" aria-pressed="${state.filter.has(c)}" data-chip="${c}">${c}</button>`).join('');
+  const rows=state.docs.filter(matches);
+  $('#docs-lead').textContent=`${rows.length} von ${state.docs.length} Dokumenten`;
+  $('#docrows').innerHTML=rows.map(d=>`<tr><td><strong style="color:var(--text-primary)">${esc(state.metaName?d.name:d.art+' '+d.firma)}</strong></td><td>${esc(d.bereich)}</td><td>${dat(d.datum)}</td><td class="num">${eur(d.betrag)}</td><td>${badgeBezahlt(d)}${d.bezahlt?'':` <button class="btn ghost" style="min-height:2rem" data-pay="${d.id}">Als bezahlt markieren</button>`}</td></tr>`).join('');
+  $('#docs-empty').hidden=rows.length>0}
+$('#chips').addEventListener('click',e=>{const c=e.target.dataset.chip;if(!c)return;state.filter.has(c)?state.filter.delete(c):state.filter.add(c);renderDocs()});
+$('#docrows').addEventListener('click',e=>{const id=e.target.dataset.pay;if(!id)return;const d=state.docs.find(x=>x.id==id);d.bezahlt=true;
+  state.fristen.filter(f=>f.typ==='Zahlung'&&f.doc.startsWith(d.firma)).forEach(f=>f.erledigt=true);toast('Als bezahlt markiert. Die Zahlungserinnerung ist erledigt.');renderDocs();renderNav()});
+$('#q').addEventListener('input',e=>{state.q=e.target.value;if(state.view!=='docs')go('docs');else renderDocs()});
+
+/* Fristen */
+function renderFristen(){
+  const list=[...state.fristen].sort((a,b)=>a.datum.localeCompare(b.datum));
+  $('#timeline').innerHTML=list.map(f=>{const n=days(f.datum),cls=f.erledigt?'done':n<0?'late':n<=14?'soon':'';
+   const when=f.erledigt?'✓ Erledigt':n<0?`▲ ${-n} Tage überfällig`:n===0?'● Heute':`in ${n} Tagen`;
+   return `<div class="tl ${cls}"><div class="card"><div class="row spread" style="flex-wrap:wrap"><div><span class="badge ${f.typ==='Zahlung'?'b-blue':'b-purple'}">${f.typ}</span> <strong style="color:var(--text-primary)">${dat(f.datum)}</strong> <span class="muted">· ${when}</span>${f.wieder?` <span class="badge b-gray">↻ ${f.wieder}</span>`:''}<div>${esc(f.doc)}</div></div>
+   ${f.erledigt?'':`<div class="row"><button class="btn primary" data-done="${f.id}">Erledigt</button><button class="btn secondary" data-snooze="${f.id}">Morgen erinnern</button></div>`}</div></div></div>`}).join('')}
+$('#timeline').addEventListener('click',e=>{const d=e.target.dataset.done,s=e.target.dataset.snooze;
+  if(d){state.fristen.find(f=>f.id==d).erledigt=true;toast('Erledigt');renderFristen();renderNav()}
+  if(s){toast('Du wirst morgen erneut erinnert')}});
+
+/* Auswertung */
+function renderStats(){
+  const all=state.docs.filter(d=>d.geprueft),years=[...new Set(all.map(d=>d.datum.slice(0,4)))].sort().reverse();
+  $('#year').innerHTML=years.map(y=>`<option ${y===state.year?'selected':''}>${y}</option>`).join('');
+  const cur=all.filter(d=>d.datum.startsWith(state.year)),sum=a=>a.reduce((s,d)=>s+d.betrag,0);
+  const open=cur.filter(d=>!d.bezahlt);
+  $('#kpis').innerHTML=`<div class="card"><div class="label">Ausgaben ${state.year}</div><div class="metric">${eur(sum(cur))}</div></div><div class="card"><div class="label">Noch offen</div><div class="metric">${eur(sum(open))}</div><span class="badge ${open.length?'b-red':'b-green'}">${open.length?'● '+open.length+' Rechnung offen':'✓ Alles bezahlt'}</span></div><div class="card"><div class="label">Dokumente</div><div class="metric">${cur.length}</div></div>`;
+  const group=(key)=>{const m={};cur.forEach(d=>m[d[key]]=(m[d[key]]||0)+d.betrag);return Object.entries(m).sort((a,b)=>b[1]-a[1])};
+  const bars=(rows)=>{const mx=Math.max(...rows.map(r=>r[1]),1);return rows.map(([k,v])=>`<div class="bar"><span>${esc(k)}</span><div class="track"><div class="fill" style="width:${v/mx*100}%"></div></div><span class="v">${eur(v)}</span></div>`).join('')||'<div class="empty">Keine geprüften Dokumente in diesem Jahr.</div>'};
+  $('#by-company').innerHTML=bars(group('firma'));$('#by-area').innerHTML=bars(group('bereich'));
+  const ys=years.slice().reverse().map(y=>[y,sum(all.filter(d=>d.datum.startsWith(y)))]),mx=Math.max(...ys.map(y=>y[1]),1);
+  $('#by-year').innerHTML=ys.map(([y,v])=>`<div class="yc ${y===state.year?'cur':''}"><span>${eur(v)}</span><div style="height:${v/mx*80}%"></div><span>${y}</span></div>`).join('');
+  const t={};cur.forEach(d=>{const k=d.firma+'|'+d.bereich;t[k]=t[k]||{n:0,s:0};t[k].n++;t[k].s+=d.betrag});
+  $('#stat-rows').innerHTML=Object.entries(t).sort((a,b)=>b[1].s-a[1].s).map(([k,v])=>{const[f,b]=k.split('|');return `<tr><td>${esc(f)}</td><td>${esc(b)}</td><td class="num">${v.n}</td><td class="num">${eur(v.s)}</td></tr>`}).join('')}
+$('#year').onchange=e=>{state.year=e.target.value;renderStats()};
+$('#csv').onclick=()=>toast('Im echten Programm öffnet sich „Speichern unter“');
+
+/* Einstellungen */
+$('#fsz').onchange=e=>document.documentElement.style.setProperty('--fs',e.target.value+'px');
+$('#meta-name').onclick=e=>{state.metaName=!state.metaName;e.target.setAttribute('aria-pressed',state.metaName);e.target.textContent=state.metaName?'An':'Aus';
+  $('#name-demo').textContent=state.metaName?'Beispiel: Telekom_Rechnung_2026-09_49,99 €.pdf':'Beispiel: Rechnung Telekom'};
+go('start');
+</script>
+</body>
+</html>

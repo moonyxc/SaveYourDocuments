@@ -1,6 +1,6 @@
 # PLAN: Save Your Documents
 
-Stand: 2026-10-28 | Version 5 (eingearbeitet: Antworten aus Fragerunden 1 bis 6, DESIGN.md von Nils) | Status: Planung, noch kein Code
+Stand: 2026-10-28 | Version 6 | Status: Spikes S2 und S5 sowie Klickprototyp M0b umgesetzt (Linux-Entwicklungsumgebung), Ergebnisse in docs/SPIKES.md. S1, S3, S4 und die Windows-Abnahme stehen aus
 
 ## 1. Ziel
 
@@ -53,15 +53,15 @@ Privat, zunaechst Nils, Familie und Freunde. Jeder hat eine eigene Installation 
 |---|---|---|
 | D1 | Backend: Python + FastAPI | Gesetzt |
 | D2 | Shell: Tauri 2 mit Python-Sidecar (PyInstaller), Tray, Autostart, Einzelinstanz. Fallback: Electron, Backend bleibt identisch | Offen bis Spike S1 besteht |
-| D3 | Speicher: alles in einer verschluesselten SQLite/SQLCipher-Datei (Metadaten, FTS5, Dokumentinhalte als BLOBs), Datei darf gross werden | Gesetzt, Details in S2 zu verifizieren (3.1) |
+| D3 | Speicher: alles in einer verschluesselten SQLite/SQLCipher-Datei (Metadaten, FTS5, Dokumentinhalte als BLOBs), Datei darf gross werden | Gesetzt, unter Linux bestaetigt (docs/SPIKES.md), Windows-Messung offen |
 | D4 | Verschluesselung at rest: SQLCipher. Standard: zufaelliger Schluessel, an das Windows-Konto gebunden, keine Eingabe beim Start. Passwort nur optional (Umschluesselung per Einstellung). Wiederherstellungsschluessel Pflicht | Gesetzt (Nils), Technik offen bis Spike S2 |
 | D5 | Erkennung strikt lokal (kein Cloud-LLM). Zwei Stufen: OCR + Regeln als Basis, lokales Modell (z.B. via Ollama) zuschaltbar mit Mindestanforderung. Provider-Schnittstelle bleibt austauschbar | Offen bis Spike S3 |
 | D6 | Frontend: React + TypeScript + Vite + Tailwind CSS mit den Tokens aus DESIGN.md | Gesetzt |
-| D7 | Handy-Eingang: LocalSend-Protokoll v2 als Empfaenger **in Python selbst implementieren**. Alternative: fertiges Go-CLI als zweiter Sidecar | Offen bis Spike S5 (Lizenz der LocalSend-App nicht verifiziert) |
+| D7 | Handy-Eingang: LocalSend-Protokoll v2 als Empfaenger **in Python selbst implementieren**. Alternative: fertiges Go-CLI als zweiter Sidecar | Eigenimplementierung steht (backend/syd/localsend.py), Test mit echter LocalSend-App und Windows-Firewall offen |
 | D8 | Loeschkonzept: kein Loeschen im Programm, nur Status `archiviert` (ausgeblendet, wiederherstellbar) | Gesetzt, Randfaelle siehe 7 |
 | D9 | Hintergrundbetrieb: Prozess lebt mit dem Tray, Fenster schliessen beendet nicht, Beenden nur ueber Tray-Menue | Gesetzt, Umsetzung in S1 pruefen |
 | D10 | Log nur mit IDs und Ereignistypen, keine Inhalte. Alt/Neu-Werte von Korrekturen liegen in der verschluesselten Datenbank (Feldhistorie), nicht im Log | Gesetzt (Nils bestaetigt, 4.7) |
-| D11 | UI: DESIGN.md von Nils (dunkles BI-Designsystem) als Grundlage, Anpassungen laut 4.8.1, Klickprototyp vor der Umsetzung (M0b) | Gesetzt, Anpassungen offen |
+| D11 | UI: DESIGN.md von Nils (dunkles BI-Designsystem) als Grundlage, Anpassungen laut 4.8.1, Klickprototyp vor der Umsetzung (M0b) | Gesetzt, Prototyp liegt in prototype/index.html, Abnahme durch Nils offen |
 
 ### 3.1 D3: Alles in einer Datei
 
@@ -385,7 +385,7 @@ Meine Empfehlung: B mit Standard "Original unveraendert", weil dies "nie loesche
 
 Beantwortet: Eingangswege, Zusatzfunktionen, Ordner-Export, Handy-Weg (LocalSend), Mehrseiter, Verknuepfung, Hintergrundbetrieb, Export-Vorlage, Loeschen, Zielgruppe, Speicher (eine Datei), Cloud (nein), Plattform (Windows 11), Erinnerungen, Wiederholung, Waehrung (Euro), Log (nur IDs, bestaetigt), Sprache (nur Deutsch), Mehrbenutzer (nein), Kennungen (Claude entscheidet), Schluessel (Standard ohne Passwort, Passwort optional), USB (optional, einfach bei einer Datei), UI-Grundlage (DESIGN.md), Dokumentmenge (unbekannt).
 
-Noch offen:
+Noch offen (Arbeitsannahme bis zur Antwort von Nils: jeweils die Empfehlung, Prototyp und Backend richten sich danach):
 
 1. **Originalformat (4.10):** unveraendert, mit optionalem "Platz sparen" (Empfehlung), oder verkleinern?
 2. **Kontrastkorrekturen an DESIGN.md (4.8.1):** Werte anpassen, damit die eigene Regel von 4.5:1 eingehalten wird, oder DESIGN.md unveraendert?
@@ -409,5 +409,7 @@ Noch offen:
 - Unabhaengige LocalSend-Implementierungen: https://pkg.go.dev/github.com/zebroc/localsend-cli (Go), https://docs.rs/crate/rightkit-send/0.2.0/source/src/proto.rs (Rust), https://www.github.com/Horizontal-org/Tella-Desktop (Go/Wails)
 
 ## 10. Naechster Schritt
+
+Erledigt (Linux): S2 (Verschluesselung, FTS5, BLOB, Rekey, Backup), S5 (Empfaenger, Quarantaene, Tests) und M0b (Klickprototyp), siehe docs/SPIKES.md. Offen: Abnahme des Prototyps durch Nils, S1/S2/S5 auf Windows 11 (Installer, DPAPI, Firewall, echte LocalSend-App), S3 mit Gold-Set, S4. Urspruenglicher Plan:
 
 Spike S1 (inkl. Tray/Autostart), S2 (inkl. BLOB-, USB- und Schluesseltest) und S5 (LocalSend-Empfaenger) parallel zum Sammeln des Gold-Sets (S3) und zum UI-Prototyp (M0b). Erst danach M1.
