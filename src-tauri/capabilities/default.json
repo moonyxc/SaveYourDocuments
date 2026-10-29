@@ -1,0 +1,7 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "default",
+  "description": "Die Oberfläche läuft von 127.0.0.1 und braucht keine Rechte der Hülle. Tray, Autostart und Benachrichtigungen steuert nur der Rust-Teil.",
+  "windows": ["main"],
+  "permissions": []
+}

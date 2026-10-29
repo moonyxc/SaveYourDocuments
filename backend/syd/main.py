@@ -38,6 +38,36 @@ def default_ui_dir() -> Path | None:
     return next((c for c in candidates if (c / "index.html").exists()), None)
 
 
+def parent_alive(pid: int) -> bool:
+    """Prueft, ob der Elternprozess (die Tauri-Huelle) noch laeuft."""
+    if sys.platform == "win32":
+        import ctypes
+
+        kernel32 = ctypes.windll.kernel32
+        handle = kernel32.OpenProcess(0x00100000, False, pid)  # SYNCHRONIZE
+        if not handle:
+            return False
+        try:
+            return kernel32.WaitForSingleObject(handle, 0) == 0x102  # WAIT_TIMEOUT
+        finally:
+            kernel32.CloseHandle(handle)
+    try:
+        os.kill(pid, 0)
+    except ProcessLookupError:
+        return False
+    except PermissionError:
+        return True
+    return True
+
+
+async def watch_parent(pid: int, server: uvicorn.Server) -> None:
+    while not server.should_exit:
+        if not await asyncio.to_thread(parent_alive, pid):
+            server.should_exit = True
+            return
+        await asyncio.sleep(2)
+
+
 async def serve(args: argparse.Namespace) -> None:
     paths = Paths(Path(args.data_dir) if args.data_dir else None)
     logs.setup(paths.logs)
@@ -58,6 +88,9 @@ async def serve(args: argparse.Namespace) -> None:
     server = uvicorn.Server(config)
     holder["server"] = server
     task = asyncio.create_task(server.serve())
+    watcher = (
+        asyncio.create_task(watch_parent(args.parent_pid, server)) if args.parent_pid else None
+    )
     while not server.started and not task.done():
         await asyncio.sleep(0.05)
     if task.done():
@@ -70,6 +103,8 @@ async def serve(args: argparse.Namespace) -> None:
         if not args.no_browser:
             webbrowser.open(url)
     await task
+    if watcher:
+        watcher.cancel()
 
 
 def main(argv: list[str] | None = None) -> None:
@@ -80,6 +115,9 @@ def main(argv: list[str] | None = None) -> None:
     p.add_argument("--localsend-port", type=int, default=None)
     p.add_argument("--no-multicast", action="store_true")
     p.add_argument("--no-browser", action="store_true")
+    p.add_argument(
+        "--parent-pid", type=int, default=0, help="Beendet sich, wenn dieser Prozess endet"
+    )
     args = p.parse_args(argv)
     logging.getLogger("uvicorn.error").setLevel(logging.WARNING)
     try:

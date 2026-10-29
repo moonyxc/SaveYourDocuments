@@ -1,5 +1,5 @@
-import { PageHead } from "../components/ui";
+import DocumentsView from "../components/documents/DocumentsView";
 
 export default function Documents() {
-  return <PageHead title="Alle Dokumente" />;
+  return <DocumentsView />;
 }

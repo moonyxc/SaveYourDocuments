@@ -1,7 +1,27 @@
+# Python
 __pycache__/
 *.egg-info/
 .venv/
 .pytest_cache/
 .ruff_cache/
+
+# Node
 node_modules/
+
+# Eigene Daten / Build-Artefakte
 *.syd
+backend/dist/
+backend/build/
+backend/.venv-build/
+backend/packaging/tesseract/
+
+# Rust / Tauri
+src-tauri/target/
+src-tauri/gen/
+src-tauri/icon-source.png
+
+# Arbeitsverzeichnisse und Kratzer
+.sfs-scratch
+frontend/.scratch-set/
+frontend/lib.mjs
+frontend/t1.mjs

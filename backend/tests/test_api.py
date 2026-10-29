@@ -58,6 +58,16 @@ def test_guard_token_host_origin(tmp_path):
         assert pre.headers["access-control-allow-origin"] == "tauri://localhost"
 
 
+def test_shutdown_works_before_setup(tmp_path):
+    paths = Paths(tmp_path / "data")
+    state = AppState(paths, background=False, multicast=False)
+    calls = []
+    app = create_app(state, TOKEN, request_exit=lambda: calls.append(1))
+    with TestClient(app, base_url="http://127.0.0.1") as c:
+        assert c.post("/api/shutdown", headers=H).status_code == 200
+    assert calls == [1]
+
+
 def test_locked_until_setup_and_wrong_confirm(tmp_path):
     with make(tmp_path)[0] as c:
         r = c.get("/api/documents", headers=H)

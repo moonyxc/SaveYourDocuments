@@ -28,7 +28,7 @@ from .state import AppState
 log = logging.getLogger("syd.api")
 
 OPEN_PATHS = ("/api/health",)
-UNLOCKED_PATHS = ("/api/status", "/api/setup/", "/api/unlock")
+UNLOCKED_PATHS = ("/api/status", "/api/setup/", "/api/unlock", "/api/shutdown")
 CORS_ORIGINS = [
     "tauri://localhost",
     "http://tauri.localhost",

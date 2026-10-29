@@ -2,6 +2,7 @@ import { lazy, Suspense, useCallback, useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api, errorText, type Json } from "./lib/api";
 import { useEvent, useLiveEvents } from "./lib/events";
+import { useApplyDisplaySettings } from "./lib/display";
 import { NavContext, type NavParams, type View } from "./lib/nav";
 import { Icon, Spinner, useUi } from "./components/ui";
 import { Setup, Unlock } from "./views/Gate";
@@ -27,6 +28,7 @@ const NAV: { id: View; label: string; icon: string; sep?: boolean }[] = [
 ];
 
 function Shell({ mode }: { mode: string | null }) {
+  useApplyDisplaySettings();
   const qc = useQueryClient();
   const { toast } = useUi();
   const [view, setView] = useState<View>("start");

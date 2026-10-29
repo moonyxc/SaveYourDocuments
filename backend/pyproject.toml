@@ -1,6 +1,6 @@
 [project]
 name = "save-your-documents"
-version = "0.0.1"
+version = "1.0.0"
 description = "Lokales Dokumentenarchiv: Backend (Sidecar)"
 requires-python = ">=3.11"
 dependencies = [
@@ -21,6 +21,7 @@ syd = "syd.main:main"
 
 [project.optional-dependencies]
 dev = ["pytest>=8", "ruff>=0.6"]
+build = ["pyinstaller>=6.10"]
 
 [build-system]
 requires = ["setuptools>=68"]

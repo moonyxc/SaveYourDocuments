@@ -772,3 +772,13 @@ textarea {
     animation-duration: 0.01ms !important;
   }
 }
+
+/* KORREKTUR: Die ungeschichtete Regel "button { color: inherit }" überstimmt sonst die Schaltflächenfarben. */
+.btn.primary,
+.btn.danger {
+  color: #fff;
+}
+.btn.secondary,
+.btn.ghost {
+  color: var(--text-secondary);
+}
