@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import contextlib
+import ipaddress
 import logging
 import secrets
 import socket
@@ -38,6 +39,18 @@ def port_free(port: int) -> bool:
         except OSError:
             return False
     return True
+
+
+def multicast_ip(port: int) -> str | None:
+    """Ermittelt die lokale Quelladresse fuer den LocalSend-Multicastpfad."""
+    try:
+        with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as s:
+            s.connect((localsend.MULTICAST_GROUP, port))
+            address = s.getsockname()[0]
+        ip = ipaddress.ip_address(address)
+    except (OSError, ValueError):
+        return None
+    return None if ip.is_loopback or ip.is_unspecified or ip.is_multicast else str(ip)
 
 
 class LocalSendService:
@@ -169,6 +182,7 @@ class LocalSendService:
             "running": running,
             "error": self.error,
             "port": self.port,
+            "ip": multicast_ip(self.port),
             "alias": self.receiver.alias if self.receiver else self.settings()["localsend_alias"],
             "fingerprint": self.receiver.fingerprint if self.receiver else None,
             "pin_set": bool(self.settings()["localsend_pin"]),

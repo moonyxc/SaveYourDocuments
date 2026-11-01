@@ -46,7 +46,10 @@ function ReceiveCard({ settings }: { settings: Json }) {
       ) : null}
       {ls?.running ? (
         <p className="hint" style={{ marginTop: 0 }}>
-          Das Handy sieht diesen Computer als „{ls.alias}“. Anschluss: <span className="mono">{ls.port}</span>.
+          LocalSend-Adresse für „{ls.alias}“:{" "}
+          <span className="mono">
+            {ls.ip ? `${ls.ip}:${ls.port}` : `IP nicht ermittelbar (Anschluss ${ls.port})`}
+          </span>.
         </p>
       ) : null}
       <FormError>{error}</FormError>

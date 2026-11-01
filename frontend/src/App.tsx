@@ -95,6 +95,7 @@ function Shell({ mode }: { mode: string | null }) {
           <div className="brand">Save Your Documents</div>
           <form
             className="search"
+            data-tour="search"
             role="search"
             onSubmit={(e) => {
               e.preventDefault();
@@ -118,8 +119,8 @@ function Shell({ mode }: { mode: string | null }) {
             <span className={`dot ${dotClass}`} />
             <span>{pill}</span>
           </div>
-          <button className="btn ghost small" onClick={() => setTourOpen(true)} title="Kurze Tour durch das Programm">
-            Hilfe
+          <button className="btn ghost small help-btn" data-tour="help" onClick={() => setTourOpen(true)} title="Kurze Tour durch das Programm">
+            <span aria-hidden="true">?</span> Hilfe
           </button>
           {mode === "password" ? (
             <button className="btn ghost small" onClick={() => lock.mutate()} title="Archiv sperren">
@@ -133,7 +134,7 @@ function Shell({ mode }: { mode: string | null }) {
           {NAV.map((n) => (
             <div key={n.id}>
               {n.sep ? <div className="sep" /> : null}
-              <button aria-current={view === n.id ? "page" : undefined} onClick={() => go(n.id)}>
+              <button data-tour={`nav-${n.id}`} aria-current={view === n.id ? "page" : undefined} onClick={() => go(n.id)}>
                 <Icon name={n.icon} />
                 {n.label}
                 {counts[n.id] ? <span className="count">{counts[n.id]}</span> : null}
@@ -143,16 +144,18 @@ function Shell({ mode }: { mode: string | null }) {
         </nav>
 
         <main>
-          <Suspense fallback={<Spinner />}>
-            {view === "start" && <Dashboard />}
-            {view === "import" && <Import />}
-            {view === "review" && <Review />}
-            {view === "docs" && <Documents />}
-            {view === "fristen" && <Deadlines />}
-            {view === "stats" && <Stats />}
-            {view === "export" && <Export />}
-            {view === "settings" && <Settings />}
-          </Suspense>
+          <div key={view} className="page-enter">
+            <Suspense fallback={<Spinner />}>
+              {view === "start" && <Dashboard />}
+              {view === "import" && <Import />}
+              {view === "review" && <Review />}
+              {view === "docs" && <Documents />}
+              {view === "fristen" && <Deadlines />}
+              {view === "stats" && <Stats />}
+              {view === "export" && <Export />}
+              {view === "settings" && <Settings />}
+            </Suspense>
+          </div>
         </main>
         {tourOpen || autoTour ? <Tutorial onGo={go} onClose={closeTour} /> : null}
       </div>
