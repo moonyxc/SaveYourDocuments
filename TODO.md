@@ -35,7 +35,31 @@ Stand: Alles Programmierbare ist umgesetzt. Offen ist, was nur auf Windows 11, m
 - [ ] Prüfen: Version erhöhen, Release veröffentlichen, App meldet „Update verfügbar“
 - [ ] Update-Funktion in `PLAN.md` und `docs/SPIKES.md` erwähnen
 
-## 5. Sonstiges
+## 5. Weitere Punkte aus PLAN.md
+
+- [ ] `scripts/smoke-backend.py` gegen die gebaute Windows-Exe laufen lassen (S1)
+- [ ] Code-Signing des Installers, SmartScreen prüfen
+- [ ] Performance-Test mit 10.000+ Dokumenten
+- [ ] OCR-Vergleich Tesseract gegen Alternativen unter Windows (S4)
+- [ ] Sicherheitsreview formal abhaken (Sidecar nur 127.0.0.1, Token, minimale Tauri-Rechte, LocalSend-Port nur im LAN)
+- [ ] Abnahme der Oberfläche durch Nils
+
+## 6. Entscheidungen von Nils (PLAN.md Abschnitt 8, bis dahin Arbeitsannahmen)
+
+- [ ] Originalformat: unverändert mit optionalem „Platz sparen“ oder verkleinern?
+- [ ] DESIGN.md-Kontraste auf 4,5:1 anpassen oder unverändert lassen?
+- [ ] Schriftgröße: 14 px oder 16 px mit einstellbarer Größe?
+- [ ] Hell-Variante später ergänzen?
+- [ ] Gold-Set (S3): 30 echte Dokumente sammeln und anonymisieren, auch schlechte Handyfotos und mehrseitige Briefe
+
+## 7. Neue Funktion: Weihnachtsmodus
+
+- [ ] Button (an/aus) in den Einstellungen, Zustand als Einstellung speichern
+- [ ] Bei „an“: Weihnachtsmützen (z. B. auf Logo/Symbolen) und Lichterketten (z. B. am oberen Rand und an Karten) passend zum Design anzeigen
+- [ ] Rein dekorativ, lokal (keine externen Bilder), Kontrast und Lesbarkeit bleiben erhalten
+- [ ] Bewegung abschaltbar (`prefers-reduced-motion`)
+
+## 8. Sonstiges
 
 - [ ] Schriften Inter/JetBrains Mono lokal mitliefern (Lizenz prüfen), bisher Systemschrift-Fallback
 - [ ] Offene Fragen aus `PLAN.md` Abschnitt 8 (aktuell Arbeitsannahmen) mit dem Nutzer bestätigen
