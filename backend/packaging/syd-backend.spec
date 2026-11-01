@@ -38,6 +38,17 @@ a = Analysis(
     excludes=["tkinter", "pytest"],
     noarchive=False,
 )
+# Ein im PATH liegendes Tesseract bringt eine andere OpenSSL mit; PyInstaller sammelt sonst
+# diese statt der zu _ssl.pyd passenden aus dem Python-Ordner ein (ImportError beim Start).
+import sys
+
+_py_dlls = Path(sys.base_prefix) / "DLLs"
+_own = {p.name.lower(): str(p) for p in _py_dlls.glob("lib*-3*.dll")}
+a.binaries = [
+    (n, _own.get(Path(n).name.lower(), s), t) if Path(n).parent == Path(".") else (n, s, t)
+    for n, s, t in a.binaries
+]
+
 pyz = PYZ(a.pure)
 exe = EXE(
     pyz,

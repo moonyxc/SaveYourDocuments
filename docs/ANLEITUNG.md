@@ -4,7 +4,7 @@ Save Your Documents sammelt deine wichtigen Dokumente an einem Ort: Rechnungen, 
 
 ## Installieren
 
-1. Die Datei `Save Your Documents_1.0.0_x64-setup.exe` doppelklicken.
+1. Die Datei `Save Your Documents_<Version>_x64-setup.exe` doppelklicken.
 2. Zeigt Windows „Der Computer wurde durch Windows geschützt“, auf **Weitere Informationen** und dann **Trotzdem ausführen** klicken. Das passiert, weil der Installer nicht kostenpflichtig signiert ist.
 3. Nach der Installation startet das Programm. Es läuft danach unten rechts im Infobereich (Tray) und startet mit Windows. Das Fenster zu schließen beendet es nicht.
 

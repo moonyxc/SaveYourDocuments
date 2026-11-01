@@ -268,6 +268,11 @@ def test_company_conflict_and_settings_validation(tmp_path):
         assert r.status_code == 400
         ok = c.put("/api/settings", json={"font_size": 18}, headers=H)
         assert ok.json()["font_size"] == 18
+        assert c.get("/api/settings", headers=H).json()["tutorial_done"] is False
+        assert (
+            c.put("/api/settings", json={"tutorial_done": True}, headers=H).json()["tutorial_done"]
+            is True
+        )
         assert c.get("/api/documents/999", headers=H).status_code == 404
         r = c.get("/api/documents", params={"limit": 0}, headers=H)
         assert r.status_code == 422

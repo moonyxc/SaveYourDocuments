@@ -97,6 +97,7 @@ def test_version_is_consistent_everywhere():
     from syd import __version__
 
     root = Path(__file__).resolve().parents[2]
+    assert (root / "version.txt").read_text("utf-8").strip() == __version__
     assert parse_version(__version__) is not None
     assert (
         tomllib.loads((root / "backend/pyproject.toml").read_text())["project"]["version"]

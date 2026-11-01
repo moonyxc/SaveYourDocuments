@@ -218,10 +218,19 @@ def render(doc: Doc, *, noise: bool = False, rotate: float = 0.0, size=(1654, 23
     """A4 bei ca. 200 dpi."""
     img = Image.new("RGB", size, "white")
     d = ImageDraw.Draw(img)
-    font = _font(34)
+    font, small = _font(34), _font(22)
     y = 140
     for line in doc.lines:
-        d.text((130, y), line, fill="black", font=font)
+        if line.startswith("§"):  # kleine Absenderzeile im Adressfenster
+            d.text((130, y), line[1:], fill="black", font=small)
+            y += 40
+            continue
+        if "||" in line:  # zwei Spalten
+            left, right = line.split("||", 1)
+            d.text((130, y), left, fill="black", font=font)
+            d.text((960, y), right, fill="black", font=font)
+        else:
+            d.text((130, y), line, fill="black", font=font)
         y += 58
     if noise:
         rnd = random.Random(7)
@@ -233,6 +242,43 @@ def render(doc: Doc, *, noise: bool = False, rotate: float = 0.0, size=(1654, 23
         img = img.filter(ImageFilter.GaussianBlur(0.8))
     if rotate:
         img = img.rotate(rotate, expand=True, fillcolor="white")
+    return img
+
+
+def degrade(img: Image.Image, seed: int, level: str = "photo") -> Image.Image:
+    """Handy-Foto-Effekte: Perspektive, Drehung bis 5 Grad, Schatten, Unschaerfe, Rauschen,
+    niedrige Aufloesung und JPEG. `hard` ist staerker und dreht manche Seiten um 90/180 Grad."""
+    from PIL import ImageChops
+
+    hard = level == "hard"
+    rnd = random.Random(seed)
+    w, h = img.size
+    scale = rnd.uniform(0.5, 0.65) if hard else rnd.uniform(0.7, 0.9)
+    img = img.resize((round(w * scale), round(h * scale)), Image.BILINEAR)
+    w, h = img.size
+    j = 0.025 if hard else 0.015  # Perspektive: Ecken verschieben
+    dx = [rnd.uniform(-j, j) * w for _ in range(4)]
+    dy = [rnd.uniform(-j, j) * h for _ in range(4)]
+    quad = (dx[0], dy[0], dx[1], h + dy[1], w + dx[2], h + dy[2], w + dx[3], dy[3])
+    img = img.transform((w, h), Image.QUAD, quad, Image.BICUBIC, fillcolor=(70, 60, 50))
+    angle = rnd.uniform(-5, 5)
+    img = img.rotate(angle, expand=True, resample=Image.BICUBIC, fillcolor=(70, 60, 50))
+    grad = Image.linear_gradient("L").rotate(rnd.choice((0, 90, 180, 270)))
+    low = rnd.randrange(150, 200) if hard else rnd.randrange(185, 225)
+    grad = grad.resize(img.size).point(lambda v: low + v * (255 - low) // 255)
+    img = ImageChops.multiply(img, Image.merge("RGB", (grad, grad, grad)))
+    img = img.filter(
+        ImageFilter.GaussianBlur(rnd.uniform(0.9, 1.5) if hard else rnd.uniform(0.5, 1.0))
+    )
+    noise = Image.effect_noise(img.size, 18 if hard else 9).convert("RGB")
+    img = ImageChops.add(img, noise, 1.0, -128)
+    buf = io.BytesIO()
+    img.save(buf, "JPEG", quality=rnd.randrange(30, 45) if hard else rnd.randrange(50, 70))
+    img = Image.open(io.BytesIO(buf.getvalue())).convert("RGB")
+    if hard and seed % 5 == 1:
+        img = img.rotate(90, expand=True)
+    elif hard and seed % 7 == 3:
+        img = img.rotate(180, expand=True)
     return img
 
 

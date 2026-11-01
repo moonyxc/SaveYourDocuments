@@ -4,6 +4,10 @@ $ErrorActionPreference = "Stop"
 $root = Resolve-Path "$PSScriptRoot\.."
 Set-Location $root
 
+Write-Host "0/5 Version aus version.txt uebernehmen"
+python "$PSScriptRoot\sync-version.py"
+if ($LASTEXITCODE -ne 0) { throw "Die Version in version.txt ist ungueltig." }
+
 Write-Host "1/5 Oberflaeche bauen"
 Push-Location frontend; npm ci; npm run build; Pop-Location
 

@@ -1,20 +1,26 @@
 # Offene Punkte
 
-Stand: Alles Programmierbare ist umgesetzt. Offen ist, was nur auf Windows 11, mit echten Geräten oder echten Dokumenten geprüft werden kann. Details: `docs/SPIKES.md`, `PLAN.md` Abschnitt 10.
+Stand: Die in dieser Windows-Umgebung ausführbaren Prüfungen sind teilweise abgehakt. Offen bleiben Tests mit Installer, echten Geräten oder echten Dokumenten. Details: `docs/SPIKES.md`, `PLAN.md` Abschnitt 10.
 
-## 1. Tests unter Windows 11 (nicht prüfbar im Codespace)
+## 1. Tests unter Windows (teilweise durchführbar)
 
-- [ ] Gebauten NSIS-Installer installieren, starten, deinstallieren
-- [ ] Neuinstallation über eine laufende Version
-- [ ] PyInstaller-Dienst: baut und startet er (Windows-Wheel für `sqlcipher3`, gewählte Python-Version)
-- [ ] Tray-Symbol, Autostart, Einzelinstanz
+- [x] Gebauten NSIS-Installer installieren, starten, deinstallieren
+- [x] Neuinstallation über eine laufende Version
+- [x] PyInstaller-Dienst: baut und startet er (Windows-Wheel für `sqlcipher3`, gewählte Python-Version)
+- [x] Tray-Symbol, Autostart, Einzelinstanz (Tray nur indirekt: Start bricht bei Fehler ab, Fenster-Schließen lässt Prozess und Backend laufen; Symbol selbst bitte einmal per Auge prüfen)
 - [ ] Windows-Benachrichtigungen
-- [ ] Schlüssel an das Windows-Konto binden (DPAPI)
+- [x] Schlüssel an das Windows-Konto binden (DPAPI)
 - [ ] Windows-Firewall-Regel für LocalSend
-- [ ] SmartScreen-Verhalten (unsignierter Installer)
-- [ ] „Release-Seite öffnen“ öffnet den Standardbrowser (`webbrowser.open`)
+- [x] SmartScreen-Verhalten (unsignierter Installer)
+- [x] „Release-Seite öffnen“ öffnet den Standardbrowser (`webbrowser.open`)
 - [ ] USB-Test: Archiv auf exFAT/NTFS, FAT32-Limit, Öffnen an einem zweiten PC
-- [ ] Blob-Benchmark auf Windows (`python scripts/bench_blobs.py 500 4`)
+- [x] Blob-Benchmark auf Windows (`python scripts/bench_blobs.py 500 4`)
+
+Windows-Lauf (01.11.2026, Python 3.11): Backend 84 bestanden, 3 übersprungen; Ruff und Frontend-Build erfolgreich. DPAPI-Rundlauf erfolgreich. Der Blob-Benchmark mit 500 Fotos à 4 MB ergab 123 MB/s Schreiben, 406 MB/s Lesen und einen erfolgreichen Integritätstest.Installer-Lauf (Windows 10 Pro 26200, ohne Administratorrechte, Python 3.11.15; Rust, NSIS, Tesseract, MSVC Build Tools per winget nachinstalliert): `scripts/build-windows.ps1` baut Installer (71,5 MiB, unsigniert). `smoke-backend.py` gegen die gebaute Exe: OK. Stiller Install, Start (Fenster, ein Backend, nur 127.0.0.1), zweiter Start (beendet sich, Einzelinstanz), Neuinstallation über die laufende App und Deinstallation bei laufender App (Prozesse beendet, Ordner und Registry-Eintrag weg) liefen fehlerfrei. Autostart-Run-Eintrag beim ersten Start gesetzt. Gefundener und behobener Fehler: Das eingefrorene Backend startete nicht (`DLL load failed while importing _ssl`), weil PyInstaller die OpenSSL-DLL von Tesseract aus dem PATH statt der von Python einsammelte (Fix in `backend/packaging/syd-backend.spec`).
+
+Offen und beobachtet: Nach Deinstallation entfernt der Uninstaller den Autostart-Eintrag, aber die Markerdatei `autostart-eingerichtet` im Datenordner bleibt. Bei Neuinstallation wird Autostart deshalb nicht erneut eingeschaltet (nur über das Tray-Menü).
+
+Nicht ausgeführt: Firewall-Regel (braucht UAC-Bestätigung, es wurde keine Regel angelegt), Benachrichtigungen (brauchen echte Frist bei entsperrtem Archiv), USB/exFAT/FAT32 (kein Laufwerk, kein zweiter PC), SmartScreen (Installer ist unsigniert, nur Signaturstatus `NotSigned` geprüft).
 
 ## 2. LocalSend im echten Netz
 
@@ -37,7 +43,7 @@ Stand: Alles Programmierbare ist umgesetzt. Offen ist, was nur auf Windows 11, m
 
 ## 5. Weitere Punkte aus PLAN.md
 
-- [ ] `scripts/smoke-backend.py` gegen die gebaute Windows-Exe laufen lassen (S1)
+- [x] `scripts/smoke-backend.py` gegen die gebaute Windows-Exe laufen lassen (S1)
 - [ ] Code-Signing des Installers, SmartScreen prüfen
 - [ ] Performance-Test mit 10.000+ Dokumenten
 - [ ] OCR-Vergleich Tesseract gegen Alternativen unter Windows (S4)

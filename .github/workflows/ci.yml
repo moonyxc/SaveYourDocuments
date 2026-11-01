@@ -20,6 +20,8 @@ jobs:
       - name: Abhängigkeiten
         working-directory: backend
         run: pip install -e ".[dev]"
+      - name: Version prüfen (version.txt muss überall übernommen sein)
+        run: python scripts/sync-version.py --check
       - name: Lint
         working-directory: backend
         run: ruff check . && ruff format --check .

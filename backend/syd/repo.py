@@ -87,6 +87,7 @@ DEFAULT_SETTINGS: dict[str, object] = {
     "font_size": 16,
     "update_check_auto": False,
     "developer_mode": False,
+    "tutorial_done": False,
 }
 
 EDITABLE_FIELDS = {

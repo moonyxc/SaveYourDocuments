@@ -1,4 +1,4 @@
-import { lazy, Suspense, useCallback, useMemo, useState } from "react";
+import { lazy, Suspense, useCallback, useMemo, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api, errorText, type Json } from "./lib/api";
 import { useEvent, useLiveEvents } from "./lib/events";
@@ -6,6 +6,7 @@ import { useApplyDisplaySettings } from "./lib/display";
 import { NavContext, type NavParams, type View } from "./lib/nav";
 import { Icon, Spinner, useUi } from "./components/ui";
 import { Setup, Unlock } from "./views/Gate";
+import { Tutorial } from "./components/Tutorial";
 
 const Dashboard = lazy(() => import("./views/Dashboard"));
 const Import = lazy(() => import("./views/Import"));
@@ -35,6 +36,7 @@ function Shell({ mode }: { mode: string | null }) {
   const [params, setParams] = useState<NavParams>({});
   const [q, setQ] = useState("");
   const [live, setLive] = useState(true);
+  const tourDismissed = useRef(false);
 
   const go = useCallback((v: View, p: NavParams = {}) => {
     setView(v);
@@ -42,6 +44,19 @@ function Shell({ mode }: { mode: string | null }) {
     window.scrollTo(0, 0);
   }, []);
   const nav = useMemo(() => ({ view, params, go }), [view, params, go]);
+
+  const settings = useQuery({ queryKey: ["settings"], queryFn: () => api.get<Json>("/api/settings") });
+  const [tourOpen, setTourOpen] = useState(false);
+  const autoTour = settings.data?.tutorial_done === false && !tourDismissed.current;
+  const closeTour = useCallback(() => {
+    tourDismissed.current = true;
+    setTourOpen(false);
+    go("start");
+    api
+      .put<Json>("/api/settings", { tutorial_done: true })
+      .then((d) => qc.setQueryData(["settings"], d))
+      .catch(() => {});
+  }, [go, qc]);
 
   useLiveEvents(true, setLive);
   useEvent((e) => {
@@ -66,7 +81,7 @@ function Shell({ mode }: { mode: string | null }) {
   const ls = incoming.data?.status;
   const dotClass = !live ? "bad" : ls?.running ? "" : "warn";
   const pill = !live
-    ? "Keine Verbindung zum Hintergrunddienst"
+    ? "Programm im Hintergrund antwortet nicht"
     : ls?.running
       ? `Empfangsbereit · „${ls.alias}“`
       : ls?.enabled
@@ -103,6 +118,9 @@ function Shell({ mode }: { mode: string | null }) {
             <span className={`dot ${dotClass}`} />
             <span>{pill}</span>
           </div>
+          <button className="btn ghost small" onClick={() => setTourOpen(true)} title="Kurze Tour durch das Programm">
+            Hilfe
+          </button>
           {mode === "password" ? (
             <button className="btn ghost small" onClick={() => lock.mutate()} title="Archiv sperren">
               <Icon name="lock" className="" />
@@ -136,6 +154,7 @@ function Shell({ mode }: { mode: string | null }) {
             {view === "settings" && <Settings />}
           </Suspense>
         </main>
+        {tourOpen || autoTour ? <Tutorial onGo={go} onClose={closeTour} /> : null}
       </div>
     </NavContext.Provider>
   );
@@ -163,7 +182,7 @@ export default function App() {
         <h1>{unauth ? "Zugriff verweigert" : "Keine Verbindung"}</h1>
         <p className="lead">
           {unauth
-            ? "Öffne Save Your Documents über die Programmverknüpfung oder das Tray-Symbol. Dieser Link ist abgelaufen."
+            ? "Öffne Save Your Documents über die Programmverknüpfung oder das Symbol neben der Uhr. Dieser Link ist abgelaufen."
             : errorText(status.error)}
         </p>
         <button className="btn primary" onClick={() => void status.refetch()}>
