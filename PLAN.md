@@ -410,7 +410,7 @@ Noch offen (Arbeitsannahme bis zur Antwort von Nils: jeweils die Empfehlung, Pro
 
 ## 10. Naechster Schritt
 
-**Umgesetzt (Stand 2026-11-01):** M0b bis M7 sowie in M8 Backup/Wiederherstellung, Erststart-Assistent, Anleitung (docs/ANLEITUNG.md), Installer-Skripte, CI. Details: README.md, docs/SPIKES.md, docs/ENTWICKLUNG.md. Getestet unter Linux: 75 Backend-Tests mit echter Verschluesselung und echter OCR, Ende-zu-Ende-Lauf der Oberflaeche im Browser (Einrichtung, Import, Erkennung, Pruefen, Dokumente, Fristen, Auswertung, Export, Einstellungen), `cargo check` und ein Start der Huelle unter Xvfb samt Backend-Start und -Aufraeumen.
+**Umgesetzt (Stand 2026-11-01):** M0b bis M7 sowie in M8 Backup/Wiederherstellung, Erststart-Assistent, Anleitung (docs/ANLEITUNG.md), Installer-Skripte, CI, Versionsanzeige und Update-Pruefung ueber die GitHub-API (nur Hinweis, kein Download; automatische Pruefung standardmaessig aus). Offene Aufgaben: TODO.md. Details: README.md, docs/SPIKES.md, docs/ENTWICKLUNG.md. Getestet unter Linux: 87 Backend-Tests mit echter Verschluesselung und echter OCR, Ende-zu-Ende-Lauf der Oberflaeche im Browser (Einrichtung, Import, Erkennung, Pruefen, Dokumente, Fristen, Auswertung, Export, Einstellungen), `cargo check` und ein Start der Huelle unter Xvfb samt Backend-Start und -Aufraeumen.
 
 **Offen, nur auf Windows 11 moeglich:**
 
