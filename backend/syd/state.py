@@ -176,6 +176,7 @@ class AppState:
             with contextlib.suppress(asyncio.CancelledError, Exception):
                 await t
         self._tasks = []
+        self._discard_pending()
         if self.state == "ready":
             with contextlib.suppress(Exception):
                 await self.ls.stop()
@@ -246,21 +247,37 @@ class AppState:
     # --- Einrichtung ---------------------------------------------------------------
 
     def _discard_pending(self) -> None:
-        if self._pending:
-            with contextlib.suppress(Exception):
-                self._pending["vault"].close()
-            self._pending = None
+        pending = self._pending
+        if not pending:
+            return
+        with contextlib.suppress(Exception):
+            pending["vault"].close()
+        self._pending = None
+        self._move_aside(Path(pending["path"]))
 
     def _move_aside(self, path: Path) -> None:
         """Eine unfertige Archivdatei wird nie geloescht, nur beiseitegelegt."""
-        if not path.exists():
+        side_suffixes = ("-wal", "-shm")
+        sidecars = [path.with_name(path.name + suffix) for suffix in side_suffixes]
+        if not path.exists() and not any(side.exists() for side in sidecars):
             return
         stamp = time.strftime("%Y%m%d-%H%M%S")
-        path.rename(path.with_name(f"{path.name}.unfertig-{stamp}"))
-        for suffix in ("-wal", "-shm"):
-            side = path.with_name(path.name + suffix)
+        sequence = 1
+        while True:
+            tag = stamp if sequence == 1 else f"{stamp}-{sequence}"
+            targets = [
+                path.with_name(f"{path.name}.unfertig-{tag}"),
+                *(path.with_name(f"{path.name}{suffix}.unfertig-{tag}") for suffix in side_suffixes),
+            ]
+            if not any(target.exists() for target in targets):
+                break
+            sequence += 1
+        if path.exists():
+            path.rename(targets[0])
+        for side_suffix in side_suffixes:
+            side = path.with_name(path.name + side_suffix)
             if side.exists():
-                side.rename(side.with_name(f"{side.name}.unfertig-{stamp}"))
+                side.rename(side.with_name(f"{side.name}.unfertig-{tag}"))
 
     async def setup_create(
         self, mode: str, password: str | None = None, vault_dir: str | None = None
@@ -459,8 +476,9 @@ class AppState:
         return {
             "state": self.state,
             "reason": self.reason,
-            "mode": self.cfg.mode,
+            "mode": self._pending["mode"] if self._pending else self.cfg.mode,
             "version": __version__,
             "setup_pending": self._pending is not None,
+            "pending_vault_path": self._pending["path"] if self._pending else None,
             "key_store": keystore.method(),
         }

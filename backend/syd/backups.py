@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import os
+import secrets
 import shutil
 import sys
 from datetime import datetime
@@ -19,12 +20,15 @@ def make_backup(vault: Vault, dest_dir: Path, keep: int = 7) -> Path:
     dest_dir.mkdir(parents=True, exist_ok=True)
     name = f"{BACKUP_PREFIX}{datetime.now():%Y%m%d-%H%M%S}{BACKUP_SUFFIX}"
     target = dest_dir / name
-    tmp = target.with_name(target.name + ".part")
-    vault.backup_to(tmp)
-    os.replace(tmp, target)
-    vault.audit("backup.created")
-    rotate(dest_dir, keep)
-    return target
+    tmp = target.with_name(f".{target.name}.{secrets.token_hex(8)}.part")
+    try:
+        vault.backup_to(tmp)
+        os.replace(tmp, target)
+        vault.audit("backup.created")
+        rotate(dest_dir, keep)
+        return target
+    finally:
+        tmp.unlink(missing_ok=True)
 
 
 def list_backups(dest_dir: Path) -> list[dict]:

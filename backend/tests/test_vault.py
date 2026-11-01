@@ -40,6 +40,13 @@ def test_missing_file_does_not_create_empty_archive(path):
     assert not path.exists()
 
 
+def test_existing_empty_file_is_not_initialized_as_an_archive(path):
+    path.touch()
+    with pytest.raises(WrongKeyError):
+        Vault.open(path, generate_key())
+    assert path.stat().st_size == 0
+
+
 def test_fts5_search_german_and_archive_filter(path):
     with Vault.open(path, generate_key(), create=True) as v:
         a, _ = v.add_document("a.pdf", "application/pdf", [b"a"])

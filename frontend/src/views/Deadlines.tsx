@@ -70,7 +70,10 @@ export default function Deadlines() {
   const shown = useMemo(
     () =>
       items.filter(
-        (d) => matchStatus(d, status) && (!type || d.type === type) && (!range || d.days_left <= Number(range)),
+        (d) =>
+          matchStatus(d, status) &&
+          (!type || d.type === type) &&
+          (!range || (d.days_left >= 0 && d.days_left <= Number(range))),
       ),
     [items, status, type, range],
   );

@@ -121,7 +121,7 @@ export function download(name: string, text: string, type = "text/plain;charset=
   a.href = url;
   a.download = name;
   a.click();
-  URL.revokeObjectURL(url);
+  window.setTimeout(() => URL.revokeObjectURL(url), 10_000);
 }
 
 export async function copyText(text: string): Promise<boolean> {

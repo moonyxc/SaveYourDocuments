@@ -90,9 +90,7 @@ class Deadlines:
 
     def _make_reminders(self, deadline_id: int) -> None:
         d = self.v.row("SELECT due_date, lead_days FROM deadline WHERE id = ?", (deadline_id,))
-        self.v.execute(
-            "DELETE FROM reminder WHERE deadline_id = ? AND state = 'offen'", (deadline_id,)
-        )
+        self.v.execute("DELETE FROM reminder WHERE deadline_id = ?", (deadline_id,))
         due = date.fromisoformat(d["due_date"])
         for lead in json.loads(d["lead_days"] or "[]"):
             self.v.execute(
@@ -215,6 +213,16 @@ class Deadlines:
 
     def complete(self, deadline_id: int, done: bool = True) -> dict:
         dl = self._row(deadline_id)
+        if (
+            not done
+            and dl["type"] == "zahlungsziel"
+            and self.v.scalar("SELECT paid FROM document WHERE id = ?", (dl["document_id"],))
+        ):
+            raise _bad(
+                "Diese Zahlungsfrist ist als bezahlt markiert. Markiere das Dokument zuerst wieder als offen.",
+                "bereits_bezahlt",
+                409,
+            )
         with self.v.tx():
             self.v.execute(
                 "UPDATE deadline SET status = ? WHERE id = ?",
@@ -337,7 +345,7 @@ class Deadlines:
                 "SELECT r.id, r.deadline_id, r.due_on, r.state FROM reminder r"
                 " JOIN deadline dl ON dl.id = r.deadline_id JOIN document d ON d.id = dl.document_id"
                 " WHERE r.state IN ('offen','zurueckgestellt') AND dl.status = 'offen'"
-                " AND dl.confirmed = 1 AND d.state = 'geprueft' AND d.archived = 0"
+                " AND dl.confirmed = 1 AND d.state = 'geprueft' AND d.archived = 0 AND d.paid = 0"
                 " AND ((r.state = 'offen' AND r.due_on <= ?)"
                 "   OR (r.state = 'zurueckgestellt' AND r.snoozed_until <= ?))"
                 " ORDER BY r.deadline_id, r.due_on DESC, r.id DESC",

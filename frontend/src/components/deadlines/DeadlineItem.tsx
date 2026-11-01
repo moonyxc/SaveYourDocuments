@@ -65,7 +65,7 @@ export function DeadlineItem({ d, onEdit, onSnooze }: Props) {
         {!done && !expired ? <div className="muted hint">{leadText(d.lead_days)}</div> : null}
         {d.note ? <div className="hint">Notiz: {d.note}</div> : null}
         <div className="dl-actions">
-          {done || expired ? (
+          {d.type === "zahlungsziel" && d.paid ? null : done || expired ? (
             <button
               className="btn secondary small"
               disabled={busy}

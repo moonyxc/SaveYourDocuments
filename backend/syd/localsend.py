@@ -31,6 +31,8 @@ from cryptography.x509.oid import NameOID
 from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse, Response
 
+_socket = socket.socket
+
 API = "/api/localsend/v2"
 PROTOCOL_VERSION = "2.2"
 DEFAULT_PORT = 53317
@@ -96,7 +98,7 @@ def multicast_interfaces(port: int = DEFAULT_PORT) -> list[str]:
             addresses.append(value)
 
     try:
-        with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as probe:
+        with _socket(socket.AF_INET, socket.SOCK_DGRAM) as probe:
             probe.connect(("1.1.1.1", port))
             ip = ipaddress.ip_address(probe.getsockname()[0])
             preferred = (
@@ -111,7 +113,7 @@ def multicast_interfaces(port: int = DEFAULT_PORT) -> list[str]:
         addresses.insert(0, preferred)
     if not addresses:
         try:
-            with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as probe:
+            with _socket(socket.AF_INET, socket.SOCK_DGRAM) as probe:
                 probe.connect((MULTICAST_GROUP, port))
                 ip = ipaddress.ip_address(probe.getsockname()[0])
             if not (ip.is_loopback or ip.is_unspecified or ip.is_multicast):
@@ -123,7 +125,7 @@ def multicast_interfaces(port: int = DEFAULT_PORT) -> list[str]:
 
 def create_multicast_socket(port: int, interface: str) -> socket.socket:
     """Create one LocalSend multicast socket bound to a single interface."""
-    sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM, socket.IPPROTO_UDP)
+    sock = _socket(socket.AF_INET, socket.SOCK_DGRAM, socket.IPPROTO_UDP)
     try:
         sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
         sock.bind(("", port))
@@ -140,7 +142,7 @@ def create_multicast_socket(port: int, interface: str) -> socket.socket:
 
 def create_multicast_sender_socket(interface: str) -> socket.socket:
     """Create a send-only socket when Windows reserves the LocalSend UDP port."""
-    sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM, socket.IPPROTO_UDP)
+    sock = _socket(socket.AF_INET, socket.SOCK_DGRAM, socket.IPPROTO_UDP)
     try:
         sock.bind(("", 0))
         sock.setsockopt(socket.IPPROTO_IP, socket.IP_MULTICAST_IF, socket.inet_aton(interface))

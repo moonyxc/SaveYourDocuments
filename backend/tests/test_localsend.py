@@ -286,7 +286,7 @@ def test_multicast_interfaces_prioritize_default_route(monkeypatch):
         def getsockname(self):
             return ("192.168.178.103", 53317)
 
-    monkeypatch.setattr("syd.localsend.socket.socket", lambda *_: FakeSocket())
+    monkeypatch.setattr("syd.localsend._socket", lambda *_: FakeSocket())
     monkeypatch.setattr(
         "syd.localsend.socket.getaddrinfo",
         lambda *_: [
@@ -327,9 +327,12 @@ def test_multicast_uses_a_socket_and_announcement_burst_per_interface(monkeypatc
             self.sent = []
             self.protocol = None
             self.closed = False
+            self.burst_sent = asyncio.Event()
 
         def sendto(self, payload, address):
             self.sent.append((payload, address))
+            if len(self.sent) == 3:
+                self.burst_sent.set()
 
         def close(self):
             self.closed = True
@@ -353,9 +356,12 @@ def test_multicast_uses_a_socket_and_announcement_burst_per_interface(monkeypatc
     monkeypatch.setattr("syd.localsend.ANNOUNCEMENT_DELAYS", (0, 0, 0))
 
     async def run():
-        monkeypatch.setattr("syd.localsend.socket.socket", lambda *_: FakeSocket())
+        monkeypatch.setattr("syd.localsend._socket", lambda *_: FakeSocket())
         transports = await start_multicast(r, registrar)
-        await asyncio.sleep(0.01)
+        await asyncio.wait_for(
+            asyncio.gather(*(transport.burst_sent.wait() for _, transport in created)),
+            timeout=1,
+        )
         assert len(created) == len(interfaces)
         for (sock, transport), interface in zip(created, interfaces, strict=True):
             assert sock.bound == ("", r.port) and sock.blocking is False

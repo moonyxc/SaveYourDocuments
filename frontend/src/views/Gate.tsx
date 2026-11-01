@@ -3,7 +3,14 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { api, errorText, type Json } from "../lib/api";
 import { Field, Modal } from "../components/ui";
 
-type Status = { state: string; reason: string | null; mode: string | null; setup_pending: boolean; version: string };
+type Status = {
+  state: string;
+  reason: string | null;
+  mode: string | null;
+  setup_pending: boolean;
+  pending_vault_path: string | null;
+  version: string;
+};
 
 function Frame({ children, wide }: { children: React.ReactNode; wide?: boolean }) {
   return (
@@ -22,13 +29,15 @@ function download(name: string, text: string) {
   a.href = url;
   a.download = name;
   a.click();
-  URL.revokeObjectURL(url);
+  window.setTimeout(() => URL.revokeObjectURL(url), 10_000);
 }
 
 /** Erststart: Schutzart waehlen, Schluessel sichern, Rueckeingabe. */
 export function Setup({ status }: { status: Status }) {
   const qc = useQueryClient();
-  const [mode, setMode] = useState<"key" | "password">("key");
+  const [mode, setMode] = useState<"key" | "password">(
+    status.mode === "password" ? "password" : "key",
+  );
   const [password, setPassword] = useState("");
   const [password2, setPassword2] = useState("");
   const [folder, setFolder] = useState("");
@@ -70,6 +79,7 @@ export function Setup({ status }: { status: Status }) {
 
   if (created) {
     const isKey = created.mode === "key";
+    const resumed = created.resumed === true;
     return (
       <Frame wide>
         <h1 style={{ fontSize: "1.75rem", marginTop: ".5rem" }}>
@@ -109,10 +119,14 @@ export function Setup({ status }: { status: Status }) {
           </>
         ) : (
           <p className="lead">
-            Gib dein Passwort noch einmal ein, damit sicher ist, dass du es richtig getippt hast. Es gibt keine
-            „Passwort vergessen“-Funktion: Ohne das Passwort bleibt das Archiv verschlossen.
+            {isKey
+              ? "Die Einrichtung ist noch nicht abgeschlossen. Gib den zuvor angezeigten Wiederherstellungsschlüssel erneut ein. Wenn du ihn nicht gesichert hast, kannst du die Einrichtung neu beginnen."
+              : "Gib dein Passwort noch einmal ein, damit sicher ist, dass du es richtig getippt hast. Es gibt keine „Passwort vergessen“-Funktion: Ohne das Passwort bleibt das Archiv verschlossen."}
           </p>
         )}
+        {resumed && status.pending_vault_path ? (
+          <p className="hint">Unvollständiges Archiv: {status.pending_vault_path}</p>
+        ) : null}
         <form
           onSubmit={(e) => {
             e.preventDefault();
@@ -140,6 +154,25 @@ export function Setup({ status }: { status: Status }) {
             Archiv fertig einrichten
           </button>
         </form>
+        {resumed ? (
+          <div style={{ marginTop: "1rem" }}>
+            <p className="hint">
+              Du kannst stattdessen neu beginnen. Beim nächsten Erstellen wird das unvollständige Archiv sicher
+              beiseitegelegt.
+            </p>
+            <button
+              className="btn ghost"
+              type="button"
+              onClick={() => {
+                setCreated(null);
+                setAgain("");
+                setError("");
+              }}
+            >
+              Einrichtung neu beginnen
+            </button>
+          </div>
+        ) : null}
       </Frame>
     );
   }

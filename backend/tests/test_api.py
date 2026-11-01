@@ -68,6 +68,34 @@ def test_shutdown_works_before_setup(tmp_path):
     assert calls == [1]
 
 
+def test_move_aside_keeps_sqlite_sidecars_with_archive_tag(tmp_path):
+    state = AppState(Paths(tmp_path / "data"), background=False, multicast=False)
+    archive = tmp_path / "archiv.syd"
+    archive.write_bytes(b"unfinished")
+    (tmp_path / "archiv.syd-wal").write_bytes(b"wal")
+    (tmp_path / "archiv.syd-shm").write_bytes(b"shm")
+
+    state._move_aside(archive)
+
+    moved_archive = next(tmp_path.glob("archiv.syd.unfertig-*"))
+    tag = moved_archive.name.removeprefix("archiv.syd.unfertig-")
+    assert moved_archive.read_bytes() == b"unfinished"
+    assert (tmp_path / f"archiv.syd-wal.unfertig-{tag}").read_bytes() == b"wal"
+    assert (tmp_path / f"archiv.syd-shm.unfertig-{tag}").read_bytes() == b"shm"
+
+
+def test_move_aside_preserves_orphan_sqlite_sidecars(tmp_path):
+    state = AppState(Paths(tmp_path / "data"), background=False, multicast=False)
+    archive = tmp_path / "archiv.syd"
+    (tmp_path / "archiv.syd-wal").write_bytes(b"wal")
+
+    state._move_aside(archive)
+
+    moved_wal = next(tmp_path.glob("archiv.syd-wal.unfertig-*"))
+    assert moved_wal.read_bytes() == b"wal"
+    assert not archive.exists()
+
+
 def test_locked_until_setup_and_wrong_confirm(tmp_path):
     with make(tmp_path)[0] as c:
         r = c.get("/api/documents", headers=H)
@@ -81,6 +109,40 @@ def test_locked_until_setup_and_wrong_confirm(tmp_path):
         assert c.get("/api/documents", headers=H).json()["total"] == 0
         again = c.post("/api/setup/create", json={"mode": "key"}, headers=H)
         assert again.status_code == 409
+
+
+def test_pending_setup_can_be_restarted_in_another_folder(tmp_path):
+    first_dir = tmp_path / "first"
+    second_dir = tmp_path / "second"
+    first_dir.mkdir()
+    second_dir.mkdir()
+    client, _ = make(tmp_path)
+    with client as c:
+        first = c.post(
+            "/api/setup/create", json={"mode": "key", "vault_dir": str(first_dir)}, headers=H
+        ).json()
+        pending = c.get("/api/status", headers=H).json()
+        assert pending["setup_pending"] and pending["mode"] == "key"
+        assert pending["pending_vault_path"] == str(first_dir / "archiv.syd")
+
+        second = c.post(
+            "/api/setup/create", json={"mode": "key", "vault_dir": str(second_dir)}, headers=H
+        )
+        assert second.status_code == 200
+        assert second.json()["recovery_key"] != first["recovery_key"]
+        assert not (first_dir / "archiv.syd").exists()
+        assert list(first_dir.glob("archiv.syd.unfertig-*"))
+        assert c.get("/api/status", headers=H).json()["pending_vault_path"] == str(
+            second_dir / "archiv.syd"
+        )
+        assert (
+            c.post(
+                "/api/setup/confirm",
+                json={"secret": second.json()["recovery_key"]},
+                headers=H,
+            ).status_code
+            == 200
+        )
 
 
 def test_password_too_short_and_restart_flow(tmp_path):

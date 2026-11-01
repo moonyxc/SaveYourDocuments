@@ -337,6 +337,12 @@ class Vault:
         try:
             _apply_key(conn, key)
             conn.execute("SELECT count(*) FROM sqlite_master").fetchone()
+            version = conn.execute("PRAGMA user_version").fetchone()[0]
+            if not create and version == 0:
+                raise WrongKeyError("Datei ist kein initialisiertes Archiv")
+        except WrongKeyError:
+            conn.close()
+            raise
         except sqlcipher3.DatabaseError as exc:
             conn.close()
             raise WrongKeyError("Schluessel falsch oder Datei beschaedigt") from exc

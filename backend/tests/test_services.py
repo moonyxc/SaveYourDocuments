@@ -10,6 +10,7 @@ sys.path.insert(0, str(Path(__file__).parent))
 
 from synth import DOCS, render, to_bytes, to_pdf_bytes  # noqa: E402
 
+from syd.backups import make_backup  # noqa: E402
 from syd.deadlines import Deadlines  # noqa: E402
 from syd.exporter import Exporter  # noqa: E402
 from syd.extract import ocr  # noqa: E402
@@ -278,6 +279,47 @@ def test_paid_closes_payment_deadlines(repo, clock):
     assert dl.list() == []
     repo.set_paid(d, False)
     assert len(dl.list()) == 1
+    assert repo.v.scalar(
+        "SELECT count(*) FROM reminder WHERE deadline_id IN"
+        " (SELECT id FROM deadline WHERE document_id = ?) AND state = 'offen'",
+        (d,),
+    ) == 2
+    clock.d = date(2024, 6, 25)
+    assert len(dl.tick()["fired"]) == 1
+
+
+def test_reopening_deadline_recreates_its_reminders(repo, clock):
+    d = reviewed(
+        repo,
+        [{"type": "zahlungsziel", "due_date": "2024-06-20", "lead_days": [7, 1]}],
+        doc_type="Rechnung",
+    )
+    dl = Deadlines(repo)
+    deadline_id = repo.v.scalar("SELECT id FROM deadline WHERE document_id = ?", (d,))
+
+    clock.d = date(2024, 6, 15)
+    assert len(dl.tick()["fired"]) == 1
+    dl.complete(deadline_id, True)
+    assert dl.due_reminders() == []
+    dl.complete(deadline_id, False)
+
+    assert repo.v.scalar(
+        "SELECT count(*) FROM reminder WHERE deadline_id = ? AND state = 'offen'", (deadline_id,)
+    ) == 2
+    assert len(dl.tick()["fired"]) == 1
+
+
+def test_paid_payment_deadline_cannot_be_reopened(repo, clock):
+    d = reviewed(repo, [{"type": "zahlungsziel", "due_date": "2024-06-20"}], doc_type="Rechnung")
+    dl = Deadlines(repo)
+    deadline_id = repo.v.scalar("SELECT id FROM deadline WHERE document_id = ?", (d,))
+    repo.set_paid(d, True)
+
+    with pytest.raises(ArchiveError, match="als bezahlt markiert"):
+        dl.complete(deadline_id, False)
+    assert repo.v.scalar("SELECT status FROM deadline WHERE id = ?", (deadline_id,)) == "erledigt"
+    clock.d = date(2024, 6, 25)
+    assert dl.tick()["fired"] == []
 
 
 def test_overdue_payment_stays_visible(repo, clock):
@@ -425,6 +467,46 @@ def test_pipeline_never_overwrites_reviewed_document(repo):
     d = reviewed(repo, [])
     process_document(repo, d, recognise=fake_recognise("Rechnung Gesamtbetrag 5,00 €"))
     assert repo.get_document(d)["amount_cents"] == 1000
+
+
+def test_pipeline_reprocess_removes_stale_ocr_text_and_index(repo):
+    doc_id = make_doc(repo)
+    process_document(
+        repo,
+        doc_id,
+        recognise=lambda data, mime, lang=None: [
+            ocr.PageText("aktueller Text", 0.9),
+            ocr.PageText("alter Suchtreffer", 0.9),
+        ],
+    )
+    assert repo.v.search("Suchtreffer") == [doc_id]
+
+    process_document(
+        repo,
+        doc_id,
+        recognise=lambda data, mime, lang=None: [ocr.PageText("", 0.9)],
+    )
+
+    assert repo.v.search("Suchtreffer") == []
+    assert repo.v.scalar(
+        "SELECT count(*) FROM ocr_text WHERE document_id = ? AND page > 1", (doc_id,)
+    ) == 0
+    assert repo.v.scalar(
+        "SELECT text FROM ocr_text WHERE document_id = ? AND page = 1", (doc_id,)
+    ) == ""
+
+
+def test_backup_failure_removes_partial_temporary_file(repo, tmp_path, monkeypatch):
+    destination = tmp_path / "backups"
+
+    def fail_after_partial_write(path):
+        Path(path).write_bytes(b"partial")
+        raise OSError("disk full")
+
+    monkeypatch.setattr(repo.v, "backup_to", fail_after_partial_write)
+    with pytest.raises(OSError, match="disk full"):
+        make_backup(repo.v, destination)
+    assert not list(destination.glob("*.part"))
 
 
 def test_batch_confirm_only_high_confidence(repo):

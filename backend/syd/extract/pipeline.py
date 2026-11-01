@@ -50,6 +50,7 @@ def run_ocr(repo: Repo, document_id: int, recognise: Callable = ocr.recognise) -
     )
     texts: list[str] = []
     confs: list[float] = []
+    page_results: list[tuple[int, str, float]] = []
     page_no = 0
     error: ProcessingError | None = None
     for part in parts:
@@ -78,16 +79,24 @@ def run_ocr(repo: Repo, document_id: int, recognise: Callable = ocr.recognise) -
             page_no += 1
             texts.append(p.text)
             confs.append(p.confidence)
-            v.execute(
-                "INSERT OR REPLACE INTO ocr_text (document_id, page, text, confidence) VALUES (?,?,?,?)",
-                (document_id, page_no, p.text, p.confidence),
-            )
-            if p.text.strip():
-                v.index_text(document_id, page_no, p.text)
+            page_results.append((page_no, p.text, p.confidence))
     text = "\n\f\n".join(texts)
     conf = sum(confs) / len(confs) if confs else 0.0
     if error and not text.strip():
         raise error
+    with v.tx():
+        for page, page_text, confidence in page_results:
+            v.execute(
+                "INSERT OR REPLACE INTO ocr_text (document_id, page, text, confidence) VALUES (?,?,?,?)",
+                (document_id, page, page_text, confidence),
+            )
+            v.index_text(document_id, page, page_text)
+        v.execute(
+            "DELETE FROM ocr_text WHERE document_id = ? AND page > ?", (document_id, page_no)
+        )
+        v.execute(
+            "DELETE FROM ocr_fts WHERE document_id = ? AND page > ?", (document_id, page_no)
+        )
     return text, conf
 
 

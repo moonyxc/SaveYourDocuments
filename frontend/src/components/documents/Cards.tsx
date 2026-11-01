@@ -258,6 +258,8 @@ export function DeadlinesCard({ doc }: { doc: Json }) {
                     </Badge>
                   ) : d.status === "erledigt" ? (
                     <Badge tone="green">✓ Erledigt</Badge>
+                  ) : d.status === "abgelaufen" ? (
+                    <Badge tone="gray">– Abgelaufen</Badge>
                   ) : d.overdue ? (
                     <Badge tone="red">⚠ Überfällig</Badge>
                   ) : (
@@ -267,9 +269,17 @@ export function DeadlinesCard({ doc }: { doc: Json }) {
                 </div>
               </div>
               <div className="row wrap">
-                {d.confirmed ? (
-                  <button className="btn secondary small" onClick={() => done.mutate({ id: d.id, done: d.status !== "erledigt" })}>
-                    {d.status === "erledigt" ? "Wieder öffnen" : "Als erledigt markieren"}
+                {d.confirmed && !(d.type === "zahlungsziel" && d.paid) ? (
+                  <button
+                    className="btn secondary small"
+                    onClick={() =>
+                      done.mutate({
+                        id: d.id,
+                        done: d.status !== "erledigt" && d.status !== "abgelaufen",
+                      })
+                    }
+                  >
+                    {d.status === "erledigt" || d.status === "abgelaufen" ? "Wieder öffnen" : "Als erledigt markieren"}
                   </button>
                 ) : null}
                 <button className="btn ghost small" onClick={() => void remove(d)} aria-label={`${DEADLINE_LABEL[d.type] ?? "Frist"} am ${date(d.due_date)} entfernen`}>
@@ -351,13 +361,15 @@ export function LinksCard({ doc }: { doc: Json }) {
   const linked = new Set(links.map((l) => l.other.id));
   const candidates = (found.data?.items ?? []).filter((d) => d.id !== doc.id && !linked.has(d.id));
 
-  const act = async (fn: () => Promise<unknown>, okText?: string) => {
+  const act = async (fn: () => Promise<unknown>, okText?: string): Promise<boolean> => {
     try {
       await fn();
       refresh();
       if (okText) toast(okText);
+      return true;
     } catch (e) {
       toast(errorText(e), "bad");
+      return false;
     }
   };
   const label = (o: Json) => [o.doc_type ?? "Dokument", o.company_name].filter(Boolean).join(" · ") + (o.doc_date ? ` · ${date(o.doc_date)}` : "");
@@ -427,7 +439,11 @@ export function LinksCard({ doc }: { doc: Json }) {
           onSubmit={(e) => {
             e.preventDefault();
             if (target === null) return;
-            void act(() => api.post("/api/links", { from_id: doc.id, to_id: target, link_type: type }), "Verknüpft.").then(() => {
+            void act(
+              () => api.post("/api/links", { from_id: doc.id, to_id: target, link_type: type }),
+              "Verknüpft.",
+            ).then((success) => {
+              if (!success) return;
               setPicking(false);
               setTarget(null);
               setQ("");
@@ -578,4 +594,3 @@ export function HistoryCard({ doc }: { doc: Json }) {
     </details>
   );
 }
-
