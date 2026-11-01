@@ -288,3 +288,38 @@ def test_ui_static_and_path_traversal(tmp_path):
         assert c.get("/irgendeine/ansicht").text == "<html>ui</html>"
         assert "geheim" not in c.get("/..%2Fsecret.txt").text
         assert c.get("/api/nichtda").status_code in (401, 404)
+
+
+def test_update_check_endpoints(tmp_path, monkeypatch):
+    from syd import updates
+
+    calls = []
+
+    def fake(*a, **k):
+        calls.append(1)
+        return {"status": "aktuell", "current": "1.0.0", "checked_at": "2099-01-01T00:00:00+00:00"}
+
+    monkeypatch.setattr(updates, "check", fake)
+    c, _ = make(tmp_path)
+    with c:
+        setup_key(c)
+        assert c.get("/api/updates", headers=H).json()["status"] == "nicht_geprueft"
+        auto = c.post("/api/updates/check", json={"auto": True}, headers=H)
+        assert auto.status_code == 409 and not calls
+        assert c.post("/api/updates/check", json={}, headers=H).json()["status"] == "aktuell"
+        c.put("/api/settings", json={"update_check_auto": True}, headers=H)
+        assert c.post("/api/updates/check", json={"auto": True}, headers=H).status_code == 200
+        assert len(calls) == 1  # frisches Ergebnis wird wiederverwendet
+        assert c.get("/api/updates", headers=H).json()["status"] == "aktuell"
+        assert c.post("/api/updates/open", headers=H).status_code == 404
+        opened = []
+        monkeypatch.setattr("webbrowser.open", lambda u: opened.append(u) or True)
+        url = "https://github.com/moonyxc/SaveYourDocuments/releases/tag/v2"
+        monkeypatch.setattr(
+            updates,
+            "check",
+            lambda: {"status": "update", "url": url, "checked_at": "2099-01-01T00:00:00+00:00"},
+        )
+        c.post("/api/updates/check", json={}, headers=H)
+        assert c.post("/api/updates/open", headers=H).json()["opened"] is True
+        assert opened == [url]

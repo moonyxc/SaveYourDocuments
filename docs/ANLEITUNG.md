@@ -52,6 +52,10 @@ Dokumente werden **nie gelöscht**, nur archiviert.
 - **Wiederherstellen:** Programm beenden (Tray → Beenden), die Sicherungsdatei als `archiv.syd` in den Datenordner kopieren, Programm starten und den Wiederherstellungsschlüssel (oder das Passwort) eingeben. Auf einem neuen Computer wählst du beim ersten Start **Ich habe schon ein Archiv**.
 - Die Prüfung der Archivdatei läuft automatisch einmal pro Woche. Findet sie einen Fehler, erscheint eine Warnung auf der Startseite: dann eine Sicherung einspielen.
 
+## Updates
+
+Unter „Einstellungen“ → „Über das Programm“ siehst du deine Version und kannst mit „Jetzt nach Updates suchen“ bei GitHub nachsehen, ob eine neuere erschienen ist. Dabei werden keine Daten aus deinem Archiv gesendet. Optional sucht das Programm automatisch (höchstens alle 12 Stunden) und weist auf der Startseite darauf hin. Installiert wird nie automatisch: Lade das neue Installationsprogramm von der Release-Seite und starte es, deine Dokumente bleiben erhalten.
+
 ## Beenden und Deinstallieren
 
 - **Beenden:** Tray-Symbol rechtsklicken → **Beenden**. Danach gibt es keinen Handy-Empfang und keine Erinnerungen.

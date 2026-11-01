@@ -85,6 +85,7 @@ DEFAULT_SETTINGS: dict[str, object] = {
     "ollama_url": "http://127.0.0.1:11434",
     "ollama_model": "qwen2.5:7b",
     "font_size": 16,
+    "update_check_auto": False,
     "developer_mode": False,
 }
 

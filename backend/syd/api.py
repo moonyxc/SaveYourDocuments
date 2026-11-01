@@ -8,9 +8,10 @@ import hmac
 import io
 import logging
 import tempfile
+import webbrowser
 from collections.abc import Iterator
 from contextlib import asynccontextmanager
-from datetime import datetime
+from datetime import UTC, datetime
 from pathlib import Path
 from urllib.parse import quote
 
@@ -21,7 +22,7 @@ from fastapi.responses import FileResponse, JSONResponse, Response, StreamingRes
 from starlette.background import BackgroundTask
 from starlette.concurrency import run_in_threadpool
 
-from . import __version__, backups, firewall, logs, stats
+from . import __version__, backups, firewall, logs, stats, updates
 from .extract import ocr, ollama
 from .repo import DEADLINE_TYPES, DOC_TYPES, REF_TYPES, ArchiveError, NotFoundError
 from .state import AppState
@@ -64,6 +65,10 @@ def _bad(message: str, code: str = "ungueltig", status: int = 400) -> ArchiveErr
     return ArchiveError(message, code, status)
 
 
+def _age_hours(iso: str) -> float:
+    return (datetime.now(UTC) - datetime.fromisoformat(iso)).total_seconds() / 3600
+
+
 def _csv_response(text: str, filename: str) -> Response:
     return Response(
         text.encode("utf-8"),
@@ -94,6 +99,7 @@ def create_app(
         lifespan=lifespan,
     )
     app.state.syd = state
+    updates_state: dict = {}
     hosts = LOCAL_HOSTS | (extra_hosts or set())
     token_b = token.encode()
 
@@ -831,6 +837,33 @@ def create_app(
         else:
             state.ls.refresh()
         return new
+
+    @app.get("/api/updates")
+    def updates_cached():
+        return updates_state.get("last") or {"status": "nicht_geprueft", "current": __version__}
+
+    @app.post("/api/updates/check")
+    async def updates_check(body: dict = Body(default={})):
+        last = updates_state.get("last")
+        if body.get("auto"):
+            # Automatische Pruefung: nur wenn eingeschaltet und hoechstens einmal pro 12 Stunden.
+            if not state.repo.get_setting("update_check_auto"):
+                raise _bad("Die automatische Suche nach Updates ist ausgeschaltet.", "aus", 409)
+            if last and last["status"] != "fehler" and _age_hours(last["checked_at"]) < 12:
+                return last
+        result = await run_in_threadpool(updates.check)
+        updates_state["last"] = result
+        return result
+
+    @app.post("/api/updates/open")
+    async def updates_open():
+        # Nur die zuletzt gefundene Release-Seite dieses Projekts, nie eine Adresse vom Aufrufer.
+        last = updates_state.get("last") or {}
+        url = last.get("url") if last.get("status") == "update" else None
+        if not url or not url.startswith(updates.RELEASE_PREFIX):
+            raise _bad("Es gibt keine Release-Seite zum Öffnen.", "kein_update", 404)
+        opened = await run_in_threadpool(webbrowser.open, url)
+        return {"opened": bool(opened), "url": url}
 
     @app.get("/api/system")
     def system():

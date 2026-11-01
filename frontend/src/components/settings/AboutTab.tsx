@@ -1,5 +1,6 @@
 import { ErrorBox, Spinner } from "../ui";
 import { Section, useStatus, useSystem } from "./shared";
+import { UpdateSection } from "./Updates";
 
 export function AboutTab() {
   const status = useStatus();
@@ -29,10 +30,12 @@ export function AboutTab() {
         )}
       </Section>
 
+      {status.data ? <UpdateSection version={status.data.version} /> : null}
+
       <Section id="st-local" title="Alle Daten bleiben lokal">
         <p>
           Deine Dokumente, die Texterkennung und alle Einstellungen bleiben auf diesem Computer. Das Programm schickt
-          nichts ins Internet, und es gibt kein Konto und keine Cloud. Das Archiv ist verschlüsselt gespeichert.
+          deine Daten nie ins Internet, und es gibt kein Konto und keine Cloud. Nur die Suche nach Updates fragt, wenn du sie startest oder einschaltest, die öffentliche Versionsliste bei GitHub ab. Das Archiv ist verschlüsselt gespeichert.
         </p>
         <p>
           Dokumente vom Handy kommen nur über dein eigenes WLAN an. Kopien legt das Programm nur dort ab, wo du es unter

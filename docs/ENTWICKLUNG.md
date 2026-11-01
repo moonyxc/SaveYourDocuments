@@ -63,6 +63,12 @@ Schritte: Oberfläche bauen, Tesseract mit deutschen Sprachdaten holen (`scripts
 
 Der Installer ist **nicht signiert**. Windows SmartScreen zeigt deshalb eventuell eine Warnung („Weitere Informationen“, „Trotzdem ausführen“). Code-Signing ist ein offener Punkt.
 
+## Version und Update-Prüfung
+
+Die Version steht an vier Stellen und muss gleich sein (ein Test prüft das): `backend/syd/__init__.py`, `backend/pyproject.toml`, `src-tauri/Cargo.toml`, `src-tauri/tauri.conf.json` (und `frontend/package.json`). Neue Version: alle ändern, committen, dann auf GitHub ein Release mit Tag `vX.Y.Z` veröffentlichen (Vorabversionen als „pre-release“ markieren, sie werden ignoriert).
+
+Die Prüfung (`backend/syd/updates.py`, Regeln aus `docs/github-api-version-check.md`) liest `GET /repos/moonyxc/SaveYourDocuments/releases?per_page=100` ohne Token, folgt dem `Link`-Header, vergleicht nach SemVer und meldet `update`, `aktuell`, `kein_release` oder `fehler`. Sie lädt und installiert nichts. API: `GET /api/updates`, `POST /api/updates/check` (`{"auto": true}` nur bei eingeschalteter Einstellung `update_check_auto`, höchstens alle 12 Stunden), `POST /api/updates/open` (öffnet die zuletzt gefundene Release-Seite im Browser).
+
 ## Was wo gespeichert wird
 
 | Was | Wo |

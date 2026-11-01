@@ -5,6 +5,7 @@ import { useNav } from "../lib/nav";
 import { Badge, ErrorBox, PageHead, Spinner } from "../components/ui";
 import { Onboarding } from "../components/dashboard/Onboarding";
 import { Reminders } from "../components/dashboard/Reminders";
+import { UpdateNotice, useAutoUpdateCheck } from "../components/settings/Updates";
 import "../components/dashboard/dashboard.css";
 
 const WARNINGS: Record<string, { severe: boolean; tab: string; action: string }> = {
@@ -30,6 +31,7 @@ const count = (n: number, one: string, many: string) => `${n} ${n === 1 ? one : 
 export default function Dashboard() {
   const { go } = useNav();
   const dash = useQuery({ queryKey: ["dashboard"], queryFn: () => api.get<Json>("/api/dashboard") });
+  const update = useAutoUpdateCheck();
   const incoming = useQuery({ queryKey: ["incoming"], queryFn: () => api.get<Json>("/api/incoming") });
 
   if (dash.isLoading) return <Spinner />;
@@ -61,6 +63,8 @@ export default function Dashboard() {
             : `${idle ? "Alles erledigt. Heute gibt es nichts zu tun." : "Das ist heute zu tun."} Im Archiv: ${count(total, "Dokument", "Dokumente")}.`
         }
       />
+
+      <UpdateNotice info={update.data} />
 
       {warnings.map((w) => {
         const meta = WARNINGS[w.code] ?? { severe: false, tab: "", action: "Zu den Einstellungen" };
