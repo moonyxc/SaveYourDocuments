@@ -1,8 +1,8 @@
 """LocalSend-Protokoll v2.x, Empfaengerseite (PLAN.md D7, 4.1, S5).
 
 Sicherheitsmodell: Dateien landen zuerst in einer Quarantaene. Annahme nur nach
-Bestaetigung (decider) oder fuer vertraute Geraete. Die Absender-Kennung im HTTPS-Modus
-ist unauthentifiziert (Protokoll sieht kein Client-Zertifikat vor), siehe docs/SPIKES.md.
+Bestaetigung (decider) oder fuer vertraute Geraete. Eingehende Uploads pruefen das vom
+LocalSend-v2.2-Client unterstuetzte Client-Zertifikat aktuell nicht, siehe docs/SPIKES.md.
 """
 
 from __future__ import annotations
@@ -11,10 +11,12 @@ import asyncio
 import hashlib
 import ipaddress
 import json
+import logging
 import re
 import secrets
 import shutil
 import socket
+import ssl
 import time
 from collections import defaultdict, deque
 from collections.abc import Awaitable, Callable
@@ -30,9 +32,12 @@ from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse, Response
 
 API = "/api/localsend/v2"
-PROTOCOL_VERSION = "2.1"
+PROTOCOL_VERSION = "2.2"
 DEFAULT_PORT = 53317
 MULTICAST_GROUP = "224.0.0.167"
+ANNOUNCEMENT_DELAYS = (0.1, 0.5, 2.0)
+
+log = logging.getLogger(__name__)
 
 ALLOWED_MIME = {
     "image/jpeg",
@@ -70,6 +75,81 @@ def sniff_mime(head: bytes) -> str | None:
 
 def _mime_family(mime: str) -> str:
     return "image/heic" if mime in ("image/heic", "image/heif") else mime
+
+
+def multicast_interfaces(port: int = DEFAULT_PORT) -> list[str]:
+    """Find active IPv4 interfaces and put the default-route interface first."""
+    addresses: list[str] = []
+    try:
+        resolved = socket.getaddrinfo(socket.gethostname(), None, socket.AF_INET, socket.SOCK_DGRAM)
+    except OSError:
+        resolved = []
+    for item in resolved:
+        try:
+            ip = ipaddress.ip_address(item[4][0])
+        except (IndexError, ValueError):
+            continue
+        if ip.is_loopback or ip.is_unspecified or ip.is_multicast:
+            continue
+        value = str(ip)
+        if value not in addresses:
+            addresses.append(value)
+
+    try:
+        with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as probe:
+            probe.connect(("1.1.1.1", port))
+            ip = ipaddress.ip_address(probe.getsockname()[0])
+            preferred = (
+                str(ip) if not (ip.is_loopback or ip.is_unspecified or ip.is_multicast) else None
+            )
+    except (OSError, ValueError):
+        preferred = None
+    if preferred and preferred not in addresses:
+        addresses.insert(0, preferred)
+    elif preferred:
+        addresses.remove(preferred)
+        addresses.insert(0, preferred)
+    if not addresses:
+        try:
+            with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as probe:
+                probe.connect((MULTICAST_GROUP, port))
+                ip = ipaddress.ip_address(probe.getsockname()[0])
+            if not (ip.is_loopback or ip.is_unspecified or ip.is_multicast):
+                addresses.append(str(ip))
+        except (OSError, ValueError):
+            pass
+    return addresses
+
+
+def create_multicast_socket(port: int, interface: str) -> socket.socket:
+    """Create one LocalSend multicast socket bound to a single interface."""
+    sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM, socket.IPPROTO_UDP)
+    try:
+        sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+        sock.bind(("", port))
+        membership = socket.inet_aton(MULTICAST_GROUP) + socket.inet_aton(interface)
+        sock.setsockopt(socket.IPPROTO_IP, socket.IP_ADD_MEMBERSHIP, membership)
+        sock.setsockopt(socket.IPPROTO_IP, socket.IP_MULTICAST_IF, socket.inet_aton(interface))
+        sock.setsockopt(socket.IPPROTO_IP, socket.IP_MULTICAST_TTL, 1)
+        sock.setblocking(False)
+    except BaseException:
+        sock.close()
+        raise
+    return sock
+
+
+def create_multicast_sender_socket(interface: str) -> socket.socket:
+    """Create a send-only socket when Windows reserves the LocalSend UDP port."""
+    sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM, socket.IPPROTO_UDP)
+    try:
+        sock.bind(("", 0))
+        sock.setsockopt(socket.IPPROTO_IP, socket.IP_MULTICAST_IF, socket.inet_aton(interface))
+        sock.setsockopt(socket.IPPROTO_IP, socket.IP_MULTICAST_TTL, 1)
+        sock.setblocking(False)
+    except BaseException:
+        sock.close()
+        raise
+    return sock
 
 
 def sanitize_filename(name: str, fallback: str = "datei") -> str:
@@ -150,6 +230,7 @@ class Receiver:
         *,
         alias: str = "Save Your Documents",
         fingerprint: str | None = None,
+        tls_identity: tuple[Path, Path] | None = None,
         protocol: str = "https",
         port: int = DEFAULT_PORT,
         decider: Decider = reject_all,
@@ -166,6 +247,7 @@ class Receiver:
         self.quarantine_dir.mkdir(parents=True, exist_ok=True)
         self.alias = alias
         self.fingerprint = fingerprint or secrets.token_hex(16)
+        self.tls_identity = tls_identity
         self.protocol = protocol
         self.port = port
         self.decider = decider
@@ -513,9 +595,24 @@ class MulticastListener(asyncio.DatagramProtocol):
         self.registrar = registrar
         self.transport: asyncio.DatagramTransport | None = None
         self._tasks: set[asyncio.Task] = set()
+        self._announcement_task: asyncio.Task | None = None
 
-    def connection_made(self, transport):
+    def connection_made(self, transport: asyncio.DatagramTransport) -> None:
         self.transport = transport
+        self._announcement_task = asyncio.create_task(self._announce())
+
+    async def _announce(self) -> None:
+        payload = announcement(self.receiver)
+        for delay in ANNOUNCEMENT_DELAYS:
+            await asyncio.sleep(delay)
+            if self.transport is None:
+                return
+            self.transport.sendto(payload, (MULTICAST_GROUP, self.receiver.port))
+
+    def connection_lost(self, exc: Exception | None) -> None:
+        self.transport = None
+        if self._announcement_task and not self._announcement_task.done():
+            self._announcement_task.cancel()
 
     def datagram_received(self, data: bytes, addr) -> None:
         msg = parse_announcement(data)
@@ -529,9 +626,26 @@ class MulticastListener(asyncio.DatagramProtocol):
             ipaddress.ip_address(addr[0])
         except ValueError:
             return
-        task = asyncio.ensure_future(self.registrar(addr[0], msg))
+        task = asyncio.create_task(self.registrar(addr[0], msg))
         self._tasks.add(task)
-        task.add_done_callback(self._tasks.discard)
+        task.add_done_callback(self._registration_done)
+
+    def _registration_done(self, task: asyncio.Task) -> None:
+        self._tasks.discard(task)
+        if task.cancelled():
+            return
+        error = task.exception()
+        if error is not None:
+            log.debug("localsend_register_failed type=%s", type(error).__name__)
+
+
+class MulticastTransports:
+    def __init__(self, transports: list[asyncio.DatagramTransport]):
+        self.transports = transports
+
+    def close(self) -> None:
+        for transport in self.transports:
+            transport.close()
 
 
 async def register_via_http(receiver: Receiver, ip: str, msg: dict) -> None:
@@ -541,25 +655,74 @@ async def register_via_http(receiver: Receiver, ip: str, msg: dict) -> None:
     proto = msg.get("protocol", "https")
     if proto not in ("http", "https"):
         return
-    async with httpx.AsyncClient(verify=False, timeout=5) as client:  # noqa: S501
-        await client.post(f"{proto}://{ip}:{port}{API}/register", json=receiver.info())
+    verify: ssl.SSLContext | bool = False
+    if proto == "https":
+        if receiver.tls_identity is None:
+            raise ValueError("LocalSend HTTPS registration requires a TLS client identity")
+        verify = ssl.SSLContext(ssl.PROTOCOL_TLS_CLIENT)
+        verify.check_hostname = False
+        verify.verify_mode = ssl.CERT_NONE
+        verify.load_cert_chain(
+            certfile=str(receiver.tls_identity[0]),
+            keyfile=str(receiver.tls_identity[1]),
+        )
+    async with httpx.AsyncClient(verify=verify, timeout=5, trust_env=False) as client:  # noqa: S501
+        response = await client.post(f"{proto}://{ip}:{port}{API}/register", json=receiver.info())
+        response.raise_for_status()
 
 
-async def start_multicast(receiver: Receiver, registrar: Registrar | None = None):
-    """Tritt der Multicast-Gruppe bei und kuendigt sich an. Rueckgabe: Transport."""
+async def start_multicast(
+    receiver: Receiver, registrar: Registrar | None = None
+) -> MulticastTransports:
+    """Join and announce over one multicast socket per active IPv4 interface."""
     loop = asyncio.get_running_loop()
-    sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM, socket.IPPROTO_UDP)
-    sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-    sock.bind(("", receiver.port))
-    mreq = socket.inet_aton(MULTICAST_GROUP) + socket.inet_aton("0.0.0.0")
-    sock.setsockopt(socket.IPPROTO_IP, socket.IP_ADD_MEMBERSHIP, mreq)
-    sock.setblocking(False)
+    active_registrar = registrar
+    if active_registrar is None:
+        async def default_registrar(ip: str, msg: dict) -> None:
+            await register_via_http(receiver, ip, msg)
 
-    async def default_registrar(ip: str, msg: dict) -> None:
-        await register_via_http(receiver, ip, msg)
+        active_registrar = default_registrar
 
-    transport, _ = await loop.create_datagram_endpoint(
-        lambda: MulticastListener(receiver, registrar or default_registrar), sock=sock
-    )
-    transport.sendto(announcement(receiver), (MULTICAST_GROUP, receiver.port))
-    return transport
+    transports = []
+    last_error = None
+    try:
+        interfaces = multicast_interfaces(receiver.port)
+        for interface in interfaces:
+            for send_only in (False, True):
+                sock = None
+                try:
+                    if send_only:
+                        sock = create_multicast_sender_socket(interface)
+                    else:
+                        sock = create_multicast_socket(receiver.port, interface)
+                    transport, _ = await loop.create_datagram_endpoint(
+                        lambda: MulticastListener(receiver, active_registrar), sock=sock
+                    )
+                except OSError as exc:
+                    last_error = exc
+                    if sock is not None:
+                        sock.close()
+                    event = (
+                        "localsend_multicast_send_failed"
+                        if send_only
+                        else "localsend_multicast_listener_unavailable"
+                    )
+                    log.warning(
+                        "%s interface=%s errno=%s winerror=%s",
+                        event,
+                        interface,
+                        exc.errno if exc.errno is not None else "none",
+                        getattr(exc, "winerror", None) or "none",
+                    )
+                    if send_only:
+                        break
+                    continue
+                transports.append(transport)
+                break
+        if not transports:
+            raise OSError("No IPv4 interface could send a LocalSend announcement") from last_error
+    except BaseException:
+        for transport in transports:
+            transport.close()
+        raise
+    return MulticastTransports(transports)

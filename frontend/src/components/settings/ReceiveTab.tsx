@@ -5,6 +5,8 @@ import { Badge, ErrorBox, Field, Spinner, useUi } from "../ui";
 import { FormError, localTime, Section, Switch, useSaveSettings, useSystem } from "./shared";
 
 function portHint(error: string | null | undefined, port: number): string {
+  if (error === "multicast_fehlgeschlagen")
+    return "Der LocalSend-Empfangsserver läuft, aber die automatische Erkennung im Netzwerk ist fehlgeschlagen. Prüfe das WLAN und die UDP-Freigabe in der Windows-Firewall.";
   if (error === "port_belegt")
     return `Der Anschluss ${port} wird schon von einem anderen Programm benutzt. Schließe das andere Programm oder starte den Computer neu, dann versucht es Save Your Documents noch einmal.`;
   return "Der Empfang konnte nicht starten. Beende Save Your Documents über das Symbol im Infobereich der Taskleiste und öffne es dann neu.";
@@ -31,7 +33,11 @@ function ReceiveCard({ settings }: { settings: Json }) {
         />
         {ls ? (
           ls.running ? (
-            <Badge tone="green">✓ Empfangsbereit</Badge>
+            ls.error === "multicast_fehlgeschlagen" ? (
+              <Badge tone="red">⚠ Erkennung gestört</Badge>
+            ) : (
+              <Badge tone="green">✓ Empfangsbereit</Badge>
+            )
           ) : enabled ? (
             <Badge tone="red">✕ Blockiert</Badge>
           ) : (
@@ -39,7 +45,7 @@ function ReceiveCard({ settings }: { settings: Json }) {
           )
         ) : null}
       </div>
-      {ls && enabled && !ls.running ? (
+      {ls && enabled && (!ls.running || ls.error === "multicast_fehlgeschlagen") ? (
         <div className="notice bad" role="alert" style={{ marginBottom: "1rem" }}>
           {portHint(ls.error, ls.port)}
         </div>
@@ -252,14 +258,14 @@ function FirewallCard() {
     onSuccess: (r) => {
       void qc.invalidateQueries({ queryKey: ["firewall"] });
       if (r.ok) toast("Firewall-Regel angelegt");
-      else toast("Die Regel wurde nicht angelegt. Hast du im Windows-Fenster „Nein“ gewählt? Versuche es noch einmal.", "bad");
+      else toast("Die TCP- und UDP-Regeln wurden nicht installiert. Bestätige die Windows-Abfrage mit „Ja“ und versuche es erneut.", "bad");
     },
     onError: (e) => toast(errorText(e), "bad"),
   });
   const ask = async () => {
     const ok = await confirm({
       title: "Firewall-Regel anlegen?",
-      text: "Windows zeigt gleich ein Fenster „Benutzerkontensteuerung“ und fragt, ob Änderungen erlaubt sind. Wähle „Ja“. Die Regel erlaubt nur Verbindungen aus deinem privaten Heimnetz zu diesem Programm, nicht aus dem Internet.",
+      text: "Windows zeigt gleich ein Fenster „Benutzerkontensteuerung“ und fragt, ob Änderungen erlaubt sind. Wähle „Ja“. Die Freigabe gilt nur für Geräte im selben lokalen Netz, nicht aus dem Internet. In öffentlichen WLANs können trotzdem andere Geräte im selben Netz Anfragen stellen. Verwende sie deshalb nur in einem vertrauenswürdigen Netzwerk.",
       confirmLabel: "Weiter",
     });
     if (ok) allow.mutate();
@@ -293,7 +299,7 @@ function FirewallCard() {
               <Badge tone="gray">Status unbekannt</Badge>
             )}
             <span className="muted" style={{ marginLeft: ".5rem" }}>
-              Anschluss <span className="mono">{d.port}</span>, nur privates Netzwerk
+              Anschluss <span className="mono">{d.port}</span>, nur lokales Netz
             </span>
           </p>
           <div className="actions">

@@ -2,8 +2,10 @@ import asyncio
 import hashlib
 import json
 import socket
+import ssl
 import threading
 import time
+from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 import httpx
 import pytest
@@ -17,9 +19,12 @@ from syd.localsend import (
     announcement,
     create_app,
     make_self_signed_cert,
+    multicast_interfaces,
     parse_announcement,
+    register_via_http,
     sanitize_filename,
     sniff_mime,
+    start_multicast,
 )
 
 JPEG = b"\xff\xd8\xff\xe0" + b"\x00" * 200
@@ -72,6 +77,7 @@ def upload(client, session, fid, token, data):
 def test_info_and_register(tmp_path):
     r, c, _ = make(tmp_path)
     assert c.get(f"{API}/info").json()["alias"] == "Save Your Documents"
+    assert r.info()["version"] == "2.2"
     resp = c.post(f"{API}/register", json=INFO)
     assert resp.status_code == 200 and resp.json()["fingerprint"] == r.fingerprint
     assert c.post(f"{API}/register", content=b"kaputt").status_code == 400
@@ -264,6 +270,216 @@ def test_announcement_and_multicast_response(tmp_path):
         return seen
 
     assert asyncio.run(run()) == [("192.168.1.20", "Nice Orange")]
+
+
+def test_multicast_interfaces_prioritize_default_route(monkeypatch):
+    class FakeSocket:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *_):
+            return None
+
+        def connect(self, address):
+            assert address == ("1.1.1.1", 53317)
+
+        def getsockname(self):
+            return ("192.168.178.103", 53317)
+
+    monkeypatch.setattr("syd.localsend.socket.socket", lambda *_: FakeSocket())
+    monkeypatch.setattr(
+        "syd.localsend.socket.getaddrinfo",
+        lambda *_: [
+            (socket.AF_INET, socket.SOCK_DGRAM, 0, "", ("192.168.56.1", 0)),
+            (socket.AF_INET, socket.SOCK_DGRAM, 0, "", ("192.168.178.41", 0)),
+            (socket.AF_INET, socket.SOCK_DGRAM, 0, "", ("127.0.0.1", 0)),
+        ],
+    )
+    assert multicast_interfaces(53317) == ["192.168.178.103", "192.168.56.1", "192.168.178.41"]
+
+
+def test_multicast_uses_a_socket_and_announcement_burst_per_interface(monkeypatch, tmp_path):
+    r, _, _ = make(tmp_path)
+    interfaces = ["192.168.178.103", "192.168.178.41"]
+    created = []
+
+    class FakeSocket:
+        def __init__(self):
+            self.options = []
+            self.bound = None
+            self.blocking = None
+            self.closed = False
+
+        def setsockopt(self, level, option, value):
+            self.options.append((level, option, value))
+
+        def bind(self, address):
+            self.bound = address
+
+        def setblocking(self, value):
+            self.blocking = value
+
+        def close(self):
+            self.closed = True
+
+    class FakeTransport:
+        def __init__(self):
+            self.sent = []
+            self.protocol = None
+            self.closed = False
+
+        def sendto(self, payload, address):
+            self.sent.append((payload, address))
+
+        def close(self):
+            self.closed = True
+            self.protocol.connection_lost(None)
+
+    async def create_endpoint(loop, protocol_factory, *, sock):
+        transport = FakeTransport()
+        protocol = protocol_factory()
+        transport.protocol = protocol
+        protocol.connection_made(transport)
+        created.append((sock, transport))
+        return transport, protocol
+
+    async def registrar(_ip, _message):
+        return None
+
+    monkeypatch.setattr(
+        "asyncio.BaseEventLoop.create_datagram_endpoint", create_endpoint
+    )
+    monkeypatch.setattr("syd.localsend.multicast_interfaces", lambda _port: interfaces)
+    monkeypatch.setattr("syd.localsend.ANNOUNCEMENT_DELAYS", (0, 0, 0))
+
+    async def run():
+        monkeypatch.setattr("syd.localsend.socket.socket", lambda *_: FakeSocket())
+        transports = await start_multicast(r, registrar)
+        await asyncio.sleep(0.01)
+        assert len(created) == len(interfaces)
+        for (sock, transport), interface in zip(created, interfaces, strict=True):
+            assert sock.bound == ("", r.port) and sock.blocking is False
+            memberships = [value for _, opt, value in sock.options if opt == socket.IP_ADD_MEMBERSHIP]
+            outgoing = [value for _, opt, value in sock.options if opt == socket.IP_MULTICAST_IF]
+            assert memberships == [
+                socket.inet_aton("224.0.0.167") + socket.inet_aton(interface)
+            ]
+            assert outgoing == [socket.inet_aton(interface)]
+            assert len(transport.sent) == 3
+            assert all(
+                address == ("224.0.0.167", r.port)
+                and parse_announcement(payload)["announce"]
+                for payload, address in transport.sent
+            )
+        transports.close()
+        await asyncio.sleep(0)
+        assert all(transport.closed for _, transport in created)
+
+    asyncio.run(run())
+
+
+def test_multicast_falls_back_to_send_only_when_port_is_reserved(monkeypatch, tmp_path):
+    r, _, _ = make(tmp_path)
+    interfaces = ["192.168.178.103", "192.168.178.41"]
+    senders = []
+    transports_created = []
+
+    class FakeSocket:
+        def close(self):
+            return None
+
+    class FakeTransport:
+        def __init__(self):
+            self.sent = []
+            self.protocol = None
+
+        def sendto(self, payload, address):
+            self.sent.append((payload, address))
+
+        def close(self):
+            self.protocol.connection_lost(None)
+
+    def reserved_port(port, interface):
+        assert port == r.port
+        raise PermissionError(13, "reserved UDP port", None, 10013)
+
+    def sender_socket(interface):
+        senders.append(interface)
+        return FakeSocket()
+
+    async def create_endpoint(loop, protocol_factory, *, sock):
+        assert isinstance(sock, FakeSocket)
+        transport = FakeTransport()
+        protocol = protocol_factory()
+        transport.protocol = protocol
+        protocol.connection_made(transport)
+        transports_created.append(transport)
+        return transport, protocol
+
+    async def registrar(_ip, _message):
+        return None
+
+    monkeypatch.setattr("asyncio.BaseEventLoop.create_datagram_endpoint", create_endpoint)
+    monkeypatch.setattr("syd.localsend.multicast_interfaces", lambda _port: interfaces)
+    monkeypatch.setattr("syd.localsend.create_multicast_socket", reserved_port)
+    monkeypatch.setattr("syd.localsend.create_multicast_sender_socket", sender_socket)
+    monkeypatch.setattr("syd.localsend.ANNOUNCEMENT_DELAYS", (0,))
+
+    async def run():
+        transports = await start_multicast(r, registrar)
+        await asyncio.sleep(0.01)
+        assert senders == interfaces
+        assert len(transports_created) == len(interfaces)
+        assert all(len(transport.sent) == 1 for transport in transports_created)
+        transports.close()
+
+    asyncio.run(run())
+
+
+def test_register_via_http_sends_client_certificate(tmp_path):
+    cert, key, fingerprint = make_self_signed_cert(tmp_path / "identity")
+    received = {}
+
+    class Handler(BaseHTTPRequestHandler):
+        def do_POST(self):
+            size = int(self.headers["Content-Length"])
+            received["info"] = json.loads(self.rfile.read(size))
+            received["client_cert"] = self.connection.getpeercert(binary_form=True)
+            self.send_response(200)
+            self.send_header("Content-Length", "0")
+            self.end_headers()
+
+        def log_message(self, _format, *_args):
+            return None
+
+    tls = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
+    tls.load_cert_chain(str(cert), str(key))
+    tls.load_verify_locations(cafile=str(cert))
+    tls.verify_mode = ssl.CERT_REQUIRED
+    server = ThreadingHTTPServer(("127.0.0.1", 0), Handler)
+    server.socket = tls.wrap_socket(server.socket, server_side=True)
+    thread = threading.Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    receiver = Receiver(
+        tmp_path / "q",
+        fingerprint=fingerprint,
+        tls_identity=(cert, key),
+    )
+    try:
+        asyncio.run(
+            register_via_http(
+                receiver,
+                "127.0.0.1",
+                {"protocol": "https", "port": server.server_address[1]},
+            )
+        )
+    finally:
+        server.shutdown()
+        server.server_close()
+        thread.join(timeout=5)
+
+    assert hashlib.sha256(received["client_cert"]).hexdigest() == fingerprint
+    assert received["info"]["version"] == "2.2"
 
 
 def test_real_https_server_end_to_end(tmp_path):

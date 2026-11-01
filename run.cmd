@@ -10,13 +10,16 @@ if not exist "backend\.venv\Scripts\python.exe" (
   python -m venv backend\.venv || goto :fail
   backend\.venv\Scripts\python.exe -m pip install -q -e "backend[dev]" || goto :fail
 )
-if not exist "frontend\dist\index.html" (
-  echo Baue Oberflaeche ...
+if not exist "frontend\node_modules\.bin\vite.cmd" (
+  echo Richte Frontend-Umgebung ein ...
   pushd frontend
   call npm ci || (popd & goto :fail)
-  call npm run build || (popd & goto :fail)
   popd
 )
+echo Baue Oberflaeche ...
+pushd frontend
+call npm run build || (popd & goto :fail)
+popd
 
 pushd backend
 .\.venv\Scripts\python.exe -m syd.main --ui-dir ..\frontend\dist %*

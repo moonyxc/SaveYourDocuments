@@ -7,7 +7,6 @@ from pathlib import Path
 import httpx
 
 from syd.config import Paths
-from syd.lsservice import multicast_ip
 from syd.state import AppState
 
 
@@ -15,24 +14,6 @@ def free_port() -> int:
     with socket.socket() as s:
         s.bind(("127.0.0.1", 0))
         return s.getsockname()[1]
-
-
-def test_multicast_ip_uses_selected_network_interface(monkeypatch):
-    class FakeSocket:
-        def __enter__(self):
-            return self
-
-        def __exit__(self, *_):
-            return None
-
-        def connect(self, address):
-            assert address == ("224.0.0.167", 53317)
-
-        def getsockname(self):
-            return ("192.168.1.42", 53317)
-
-    monkeypatch.setattr("syd.lsservice.socket.socket", lambda *_: FakeSocket())
-    assert multicast_ip(53317) == "192.168.1.42"
 
 
 PNG = (

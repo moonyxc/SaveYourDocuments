@@ -34,7 +34,7 @@ Grundlage: Protokoll v2.2 (https://github.com/localsend/protocol), implementiert
 | Absicherung | nur Bild/PDF (Absenderangabe **und** Dateikopf), Groessenlimit, bereinigte Dateinamen (Pfad, Windows-Sonderzeichen, reservierte Namen), SHA-256-Pruefung (422), nur eine Sitzung gleichzeitig (409, veraltete Sitzungen laufen ab), Token pro Datei plus Absender-IP, Rate-Limit (429), Abbruch raeumt die Quarantaene auf |
 | HTTPS mit selbstsigniertem Zertifikat | bestanden (echter uvicorn-Server in einem Test) |
 
-**Bekannte Grenze:** Im HTTPS-Modus sendet der Absender keinen pruefbaren Fingerabdruck (kein Client-Zertifikat im Protokoll). Die Vertrauensliste beruht daher auf einer **behaupteten** Kennung und ist faelschbar. Empfehlung: Auto-Annahme erst nach bewusster Aktivierung, im Zweifel immer Rueckfrage. `Receiver(trusted_fingerprints=...)` ist standardmaessig leer.
+**Bekannte Grenze:** LocalSend v2.2 unterstuetzt Client-Zertifikate fuer HTTPS-Registrierungen; SaveYourDocuments verwendet dafuer seine gespeicherte Geraeteidentitaet. Der HTTPS-Empfaenger fordert fuer eingehende Uploads jedoch aktuell kein Client-Zertifikat an. Die Vertrauensliste beruht deshalb weiterhin auf der **behaupteten** Kennung aus der Anfrage und ist faelschbar. Empfehlung: Auto-Annahme erst nach bewusster Aktivierung, im Zweifel immer Rueckfrage. `Receiver(trusted_fingerprints=...)` ist standardmaessig leer.
 
 **Offen:** Test mit der echten LocalSend-App auf dem Handy, Multicast im Heimnetz, Windows-Firewall, tatsaechliches Binden des UDP-Sockets (`start_multicast` ist nur durch einen Handler-Test abgedeckt, nicht in einem echten Netz), PIN-Wiederholungsschutz.
 

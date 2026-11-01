@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import asyncio
 import contextlib
-import ipaddress
 import logging
 import secrets
 import socket
@@ -39,18 +38,6 @@ def port_free(port: int) -> bool:
         except OSError:
             return False
     return True
-
-
-def multicast_ip(port: int) -> str | None:
-    """Ermittelt die lokale Quelladresse fuer den LocalSend-Multicastpfad."""
-    try:
-        with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as s:
-            s.connect((localsend.MULTICAST_GROUP, port))
-            address = s.getsockname()[0]
-        ip = ipaddress.ip_address(address)
-    except (OSError, ValueError):
-        return None
-    return None if ip.is_loopback or ip.is_unspecified or ip.is_multicast else str(ip)
 
 
 class LocalSendService:
@@ -102,6 +89,7 @@ class LocalSendService:
             self.quarantine_dir,
             alias=s["localsend_alias"],
             fingerprint=fingerprint,
+            tls_identity=(cert, key),
             port=self.port,
             decider=self._decide,
             on_batch=self._on_batch,
@@ -136,8 +124,14 @@ class LocalSendService:
         if self.use_multicast:
             try:
                 self.transport = await localsend.start_multicast(self.receiver)
-            except OSError:
-                log.warning("localsend_multicast_failed")
+            except OSError as exc:
+                self.error = "multicast_fehlgeschlagen"
+                log.warning(
+                    "localsend_multicast_failed type=%s errno=%s winerror=%s",
+                    type(exc).__name__,
+                    exc.errno if exc.errno is not None else "none",
+                    getattr(exc, "winerror", None) or "none",
+                )
 
     async def _serve(self) -> None:
         try:
@@ -182,7 +176,7 @@ class LocalSendService:
             "running": running,
             "error": self.error,
             "port": self.port,
-            "ip": multicast_ip(self.port),
+            "ip": next(iter(localsend.multicast_interfaces(self.port)), None),
             "alias": self.receiver.alias if self.receiver else self.settings()["localsend_alias"],
             "fingerprint": self.receiver.fingerprint if self.receiver else None,
             "pin_set": bool(self.settings()["localsend_pin"]),
