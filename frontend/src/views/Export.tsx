@@ -1,5 +1,5 @@
-import { PageHead } from "../components/ui";
+import ExportView from "../components/export/ExportView";
 
 export default function Export() {
-  return <PageHead title="Exportieren" />;
+  return <ExportView />;
 }

@@ -1,6 +1,6 @@
 # PLAN: Save Your Documents
 
-Stand: 2026-10-28 | Version 6 | Status: Spikes S2 und S5 sowie Klickprototyp M0b umgesetzt (Linux-Entwicklungsumgebung), Ergebnisse in docs/SPIKES.md. S1, S3, S4 und die Windows-Abnahme stehen aus
+Stand: 2026-11-01 | Version 7 | Status: M1 bis M7 und die Windows-unabhaengigen Teile von M8 umgesetzt und unter Linux getestet (Backend, Oberflaeche, Rust-Huelle uebersetzt). Offen: Abnahme auf Windows 11 (S1, Installer, Tray/Autostart, DPAPI, Firewall, echte LocalSend-App), S3 mit echten Dokumenten, S4, Code-Signing
 
 ## 1. Ziel
 
@@ -410,6 +410,13 @@ Noch offen (Arbeitsannahme bis zur Antwort von Nils: jeweils die Empfehlung, Pro
 
 ## 10. Naechster Schritt
 
-Erledigt (Linux): S2 (Verschluesselung, FTS5, BLOB, Rekey, Backup), S5 (Empfaenger, Quarantaene, Tests) und M0b (Klickprototyp), siehe docs/SPIKES.md. Offen: Abnahme des Prototyps durch Nils, S1/S2/S5 auf Windows 11 (Installer, DPAPI, Firewall, echte LocalSend-App), S3 mit Gold-Set, S4. Urspruenglicher Plan:
+**Umgesetzt (Stand 2026-11-01):** M0b bis M7 sowie in M8 Backup/Wiederherstellung, Erststart-Assistent, Anleitung (docs/ANLEITUNG.md), Installer-Skripte, CI. Details: README.md, docs/SPIKES.md, docs/ENTWICKLUNG.md. Getestet unter Linux: 75 Backend-Tests mit echter Verschluesselung und echter OCR, Ende-zu-Ende-Lauf der Oberflaeche im Browser (Einrichtung, Import, Erkennung, Pruefen, Dokumente, Fristen, Auswertung, Export, Einstellungen), `cargo check` und ein Start der Huelle unter Xvfb samt Backend-Start und -Aufraeumen.
 
-Spike S1 (inkl. Tray/Autostart), S2 (inkl. BLOB-, USB- und Schluesseltest) und S5 (LocalSend-Empfaenger) parallel zum Sammeln des Gold-Sets (S3) und zum UI-Prototyp (M0b). Erst danach M1.
+**Offen, nur auf Windows 11 moeglich:**
+
+1. `scripts/build-windows.ps1` laufen lassen (PyInstaller-Build, NSIS-Installer) und den Rauchtest `scripts/smoke-backend.py` gegen die gebaute Exe pruefen (S1).
+2. Tray, Autostart (`--minimized`), Einzelinstanz, Windows-Benachrichtigungen, Neuinstallation ueber eine laufende Version.
+3. DPAPI-Schluesseldatei, Firewall-Regel per `netsh` (UAC), Empfang mit der echten LocalSend-App vom Handy (S5).
+4. Gold-Set mit echten, anonymisierten Dokumenten (S3) und OCR-Vergleich Tesseract/Alternativen (S4). Das Gold-Set unter `backend/scripts/goldset.py` ist synthetisch und daher optimistisch.
+5. Code-Signing und SmartScreen, Performance mit 10.000+ Dokumenten.
+6. Abnahme der Oberflaeche durch Nils.

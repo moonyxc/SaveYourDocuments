@@ -1,4 +1,4 @@
-# Spike-Ergebnisse (Stand 2026-10-28)
+# Spike-Ergebnisse (Stand 2026-11-01)
 
 Entwicklungsumgebung: Linux (Codespace), Python 3.14, SQLCipher 4.12 (`sqlcipher3-wheels`). **Nichts davon ist auf Windows 11 geprueft.** Die Abnahmekriterien aus PLAN.md Abschnitt 5 sind deshalb nur teilweise erfuellt.
 
@@ -57,6 +57,17 @@ Umgesetzte Korrekturen an DESIGN.md (4.8.1), Kontrast nach WCAG nachgerechnet:
 
 Status wird nie nur ueber Farbe gezeigt (Symbol + Text: ✓ sicher, ▲ bitte pruefen, ● offen). Schriften: im Prototyp Systemschrift-Fallback, Inter/JetBrains Mono muessen in der App lokal mitgeliefert werden (Lizenz pruefen).
 Nicht umgesetzt im Prototyp: Hell-Variante, Tastaturkuerzel der Pruefansicht, Erststart-Assistent.
+
+## Gesamtstand nach Umsetzung von M1 bis M8 (Linux)
+
+Verifiziert unter Linux (Codespace):
+
+- Backend: 75 Tests (Verschluesselung, Dienste, API, LocalSend-Dienst, OCR auf synthetischen Dokumenten), `ruff` sauber.
+- Oberflaeche: Ende-zu-Ende mit Playwright/Chromium gegen das echte Backend durchgespielt (Einrichtung mit Wiederherstellungsschluessel, Upload, Sortieren, Erkennung, Pruefen inkl. neue Firma und Fristbestaetigung, Dokumente, Fristen, Auswertung, Export, Einstellungen). Keine Konsolen- oder HTTP-Fehler.
+- Huelle (Tauri 2): `cargo build` und Start unter Xvfb: Fenster erscheint, Backend wird gestartet (`SYD_READY`, Token) und nach Beenden der Huelle ueber `--parent-pid` wieder beendet.
+- Gefundene und behobene Fehler beim Gesamttest: `/api/shutdown` war vor Einrichtung gesperrt (423); Backend beendete sich nach dem Beenden nicht, solange eine Oberflaeche per WebSocket verbunden war (jetzt Trennung erkannt und `timeout_graceful_shutdown=5`); Abfrage-Schluessel kollidierten zwischen Ansichten (Absturz in Dokumente); die CSP blockierte inline eingebettete Schriften.
+
+**Nicht geprueft (braucht Windows 11):** gebauter NSIS-Installer und PyInstaller-Dienst, Tray, Autostart, Einzelinstanz, Windows-Benachrichtigungen, DPAPI, Firewall-Regel, Empfang mit der echten LocalSend-App, SmartScreen, Neuinstallation ueber laufende Version (siehe PLAN.md Abschnitt 10). S3 und S4 sind offen: das Gold-Set ist synthetisch (alle Felder 100 %), echte Fotos werden schlechter erkannt. Die LocalSend-Quarantaene liegt bis zur Bestaetigung unverschluesselt unter `staging/localsend`.
 
 ## Arbeitsannahmen fuer die offenen Fragen (PLAN.md Abschnitt 8)
 

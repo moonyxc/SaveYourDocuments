@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import csv
 import hmac
 import io
@@ -13,7 +14,7 @@ from datetime import datetime
 from pathlib import Path
 from urllib.parse import quote
 
-from fastapi import Body, FastAPI, HTTPException, Query, Request, WebSocket, WebSocketDisconnect
+from fastapi import Body, FastAPI, HTTPException, Query, Request, WebSocket
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, JSONResponse, Response, StreamingResponse
@@ -47,7 +48,7 @@ SECURITY_HEADERS = {
 }
 UI_CSP = (
     "default-src 'self'; img-src 'self' data: blob: http://127.0.0.1:* http://localhost:*;"
-    " style-src 'self' 'unsafe-inline'; font-src 'self'; connect-src 'self' ws://127.0.0.1:*"
+    " style-src 'self' 'unsafe-inline'; font-src 'self' data:; connect-src 'self' ws://127.0.0.1:*"
     " ws://localhost:*; frame-src 'self' http://127.0.0.1:* http://localhost:*; object-src 'self'"
     " http://127.0.0.1:* http://localhost:*; frame-ancestors 'self'"
 )
@@ -251,14 +252,23 @@ def create_app(
             return
         await ws.accept()
         q = state.hub.subscribe()
-        try:
+
+        async def pump() -> None:
             await ws.send_json({"type": "hello", "state": state.state})
             while True:
-                event = await q.get()
-                await ws.send_json(event)
-        except (WebSocketDisconnect, RuntimeError):
-            pass
+                await ws.send_json(await q.get())
+
+        async def watch_disconnect() -> None:
+            while True:
+                await ws.receive_text()
+
+        tasks = [asyncio.ensure_future(pump()), asyncio.ensure_future(watch_disconnect())]
+        try:
+            await asyncio.wait(tasks, return_when=asyncio.FIRST_COMPLETED)
         finally:
+            for t in tasks:
+                t.cancel()
+            await asyncio.gather(*tasks, return_exceptions=True)
             state.hub.unsubscribe(q)
 
     # --- Startseite, Jobs ------------------------------------------------------------
@@ -284,8 +294,8 @@ def create_app(
             out.append(
                 {
                     "code": "localsend_port",
-                    "message": "Der Empfang vom Handy ist blockiert: Der Port 53317 wird schon"
-                    " von einem anderen Programm benutzt (z. B. der LocalSend-App).",
+                    "message": f"Der Empfang vom Handy ist blockiert: Der Port {ls['port']} wird"
+                    " schon von einem anderen Programm benutzt (z. B. der LocalSend-App).",
                 }
             )
         return out

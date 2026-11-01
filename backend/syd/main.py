@@ -83,7 +83,13 @@ async def serve(args: argparse.Namespace) -> None:
         request_exit=lambda: setattr(holder["server"], "should_exit", True),
     )
     config = uvicorn.Config(
-        app, host="127.0.0.1", port=port, log_config=None, access_log=False, lifespan="on"
+        app,
+        host="127.0.0.1",
+        port=port,
+        log_config=None,
+        access_log=False,
+        lifespan="on",
+        timeout_graceful_shutdown=5,
     )
     server = uvicorn.Server(config)
     holder["server"] = server

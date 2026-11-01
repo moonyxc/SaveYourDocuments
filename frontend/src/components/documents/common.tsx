@@ -52,17 +52,17 @@ export const useMeta = () =>
   useQuery({ queryKey: ["meta"], queryFn: () => api.get<Json>("/api/meta"), staleTime: 60_000 });
 export const useCompanies = () =>
   useQuery({
-    queryKey: ["companies"],
+    queryKey: ["companies", "items"],
     queryFn: async () => (await api.get<{ items: Company[] }>("/api/companies")).items,
   });
 export const useCategories = () =>
   useQuery({
-    queryKey: ["categories"],
+    queryKey: ["categories", "items"],
     queryFn: async () => (await api.get<{ items: Category[] }>("/api/categories")).items,
   });
 export const useTags = () =>
   useQuery({
-    queryKey: ["tags"],
+    queryKey: ["tags", "items"],
     queryFn: async () => (await api.get<{ items: Tag[] }>("/api/tags")).items,
   });
 export const useSettings = () =>
