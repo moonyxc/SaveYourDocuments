@@ -3,6 +3,7 @@
 # Voraussetzungen: frontend/dist ist gebaut, packaging/tesseract/ ist gefuellt
 # (scripts/fetch-tesseract.ps1). Ergebnis: dist/syd-backend/ (onedir, kein Entpacken beim Start).
 from pathlib import Path
+import sys
 
 from PyInstaller.utils.hooks import collect_all
 
@@ -18,6 +19,12 @@ for pkg in ("sqlcipher3", "pypdfium2", "pypdfium2_raw", "pillow_heif", "uvicorn"
     datas += d
     binaries += b
     hiddenimports += h
+
+_abi3t = Path(sys.base_prefix) / "abi3t-compat" / "python3t.dll"
+if _abi3t.is_file() and not any(
+    Path(source).name.lower() == _abi3t.name.lower() for source, _ in binaries
+):
+    binaries.append((str(_abi3t), "."))
 
 ui = repo / "frontend" / "dist"
 if not (ui / "index.html").exists():
@@ -40,8 +47,6 @@ a = Analysis(
 )
 # Ein im PATH liegendes Tesseract bringt eine andere OpenSSL mit; PyInstaller sammelt sonst
 # diese statt der zu _ssl.pyd passenden aus dem Python-Ordner ein (ImportError beim Start).
-import sys
-
 _py_dlls = Path(sys.base_prefix) / "DLLs"
 _own = {p.name.lower(): str(p) for p in _py_dlls.glob("lib*-3*.dll")}
 a.binaries = [
