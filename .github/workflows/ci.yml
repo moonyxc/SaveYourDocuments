@@ -41,6 +41,16 @@ jobs:
       - working-directory: frontend
         run: npm ci && npm run typecheck && npm test && npm run build
 
+  windows-launcher:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: python -m pip install pytest
+      - run: python -m pytest -q backend/tests/test_run_cmd.py
+
   shell:
     runs-on: ubuntu-latest
     steps:
