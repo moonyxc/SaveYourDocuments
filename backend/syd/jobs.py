@@ -82,7 +82,18 @@ class JobQueue:
         return cur.lastrowid
 
     def counts(self) -> dict:
-        rows = self.v.rows("SELECT state, count(*) AS n FROM job GROUP BY state")
+        rows = self.v.rows(
+            "SELECT state, count(*) AS n FROM ("
+            " SELECT CASE"
+            " WHEN EXISTS (SELECT 1 FROM job active WHERE active.document_id = j.document_id"
+            " AND active.state = 'laeuft') THEN 'laeuft'"
+            " WHEN EXISTS (SELECT 1 FROM job pending WHERE pending.document_id = j.document_id"
+            " AND pending.state = 'wartend') THEN 'wartend'"
+            " ELSE j.state END AS state"
+            " FROM job j WHERE j.id = (SELECT MAX(last.id) FROM job last"
+            " WHERE last.document_id = j.document_id)"
+            ") GROUP BY state"
+        )
         out = {"wartend": 0, "laeuft": 0, "fertig": 0, "fehler": 0}
         out.update({r["state"]: r["n"] for r in rows})
         return out

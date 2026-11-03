@@ -153,6 +153,8 @@ class LocalSendService:
             self.server.should_exit = True
             with contextlib.suppress(Exception):
                 await asyncio.wait_for(self.task, 5)
+        if self.receiver and self.receiver.session:
+            await self.receiver._finish(self.receiver.session)
         self.server = self.task = self.receiver = None
 
     async def restart(self) -> None:

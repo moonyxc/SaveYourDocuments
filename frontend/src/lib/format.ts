@@ -7,9 +7,17 @@ export function eur(cents: number | null | undefined): string {
 
 /** "1.234,56" oder "49,9" -> Cent; ungueltig -> null. */
 export function parseEuro(text: string): number | null {
-  const t = text.replace(/[€\s]/g, "").replace(/\./g, "").replace(",", ".");
+  const raw = text.replace(/[€\s]/g, "");
+  let t = raw;
+  if (raw.includes(",")) {
+    if (!/^-?[\d.]+,\d{1,2}$/.test(raw)) return null;
+    t = raw.replace(/\./g, "").replace(",", ".");
+  } else if (/^-?\d{1,3}(\.\d{3})+$/.test(raw)) {
+    t = raw.replace(/\./g, "");
+  }
   if (!/^-?\d+(\.\d{1,2})?$/.test(t)) return null;
-  return Math.round(parseFloat(t) * 100);
+  const cents = Math.round(Number(t) * 100);
+  return Number.isSafeInteger(cents) ? cents : null;
 }
 
 /** Cent -> Eingabefeld-Text "1234,56" */
@@ -25,7 +33,7 @@ export function date(iso: string | null | undefined): string {
 
 export function dateTime(iso: string | null | undefined): string {
   if (!iso) return "–";
-  const d = new Date(iso.endsWith("Z") || /[+-]\d\d:\d\d$/.test(iso) ? iso : `${iso}Z`);
+  const d = new Date(iso.endsWith("Z") || /[+-]\d\d:?\d\d$/.test(iso) ? iso : `${iso}Z`);
   if (Number.isNaN(d.getTime())) return iso;
   return d.toLocaleString("de-DE", { dateStyle: "short", timeStyle: "short" });
 }

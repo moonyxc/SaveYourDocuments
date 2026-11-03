@@ -3,16 +3,48 @@
 from __future__ import annotations
 
 import hashlib
+import io
 import secrets
 import shutil
 from collections.abc import Callable
 from pathlib import Path
+
+from PIL import Image, ImageOps, UnidentifiedImageError
 
 from .localsend import ALLOWED_MIME, Batch, sanitize_filename, sniff_mime
 from .repo import ArchiveError, NotFoundError, Repo
 from .util import now_iso
 
 DISCARD_REASON = "Beim Import aussortiert"
+PHOTO_MAX_SIDE = 2500
+
+
+def _smaller_photo(data: bytes, mime: str, name: str) -> tuple[bytes, str, str]:
+    if not mime.startswith("image/"):
+        return data, mime, name
+    from .extract.ocr import _register_heif
+
+    _register_heif()
+    try:
+        with Image.open(io.BytesIO(data)) as original:
+            if getattr(original, "n_frames", 1) != 1:
+                return data, mime, name
+            image = ImageOps.exif_transpose(original)
+            image.thumbnail((PHOTO_MAX_SIDE, PHOTO_MAX_SIDE), Image.Resampling.LANCZOS)
+            if image.mode not in ("RGB", "RGBA"):
+                image = image.convert("RGBA" if "transparency" in image.info else "RGB")
+            output = io.BytesIO()
+            image.save(output, "WEBP", quality=88, method=4)
+    except (OSError, ValueError, UnidentifiedImageError) as exc:
+        raise ArchiveError(
+            f"Das Foto „{name}“ konnte nicht verkleinert werden. "
+            "Schalte „Platz sparen“ aus oder prüfe die Datei.",
+            "foto_unlesbar",
+        ) from exc
+    smaller = output.getvalue()
+    if len(smaller) >= len(data):
+        return data, mime, name
+    return smaller, "image/webp", str(Path(name).with_suffix(".webp"))
 
 
 class ImportService:
@@ -168,13 +200,20 @@ class ImportService:
             rows = [open_files[f] for f in fids]
             if any(not Path(r["path"]).exists() for r in rows):
                 raise ArchiveError("Eine Datei im Eingang fehlt.", "datei_fehlt", 410)
-        for fids, reason in entries:
-            rows = [open_files[f] for f in fids]
-            pages = [Path(r["path"]).read_bytes() for r in rows]
-            with self.v.tx():
+        with self.v.tx():
+            space_saving = self.repo.get_setting("space_saving")
+            for fids, reason in entries:
+                rows = [open_files[f] for f in fids]
+                originals = [Path(r["path"]).read_bytes() for r in rows]
+                parts = [
+                    _smaller_photo(data, r["mime"], r["name"])
+                    if space_saving and not reason
+                    else (data, r["mime"], r["name"])
+                    for data, r in zip(originals, rows, strict=True)
+                ]
+                pages, mimes, names = map(list, zip(*parts, strict=True))
                 doc_id, existed = self.v.add_document(
-                    rows[0]["name"], rows[0]["mime"], pages,
-                    mimes=[r["mime"] for r in rows], names=[r["name"] for r in rows],
+                    names[0], mimes[0], pages, mimes=mimes, names=names, identity_pages=originals,
                     batch_id=batch_id, archive_reason=reason,
                 )  # fmt: skip
                 for r in rows:
@@ -193,7 +232,6 @@ class ImportService:
                         " VALUES (?,'process','wartend',?,?)",
                         (doc_id, now_iso(), now_iso()),
                     )
-        with self.v.tx():
             self.v.execute(
                 "UPDATE import_batch SET status = 'uebernommen' WHERE id = ?", (batch_id,)
             )

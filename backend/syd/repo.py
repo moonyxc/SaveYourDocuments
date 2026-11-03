@@ -432,8 +432,16 @@ class Repo:
     def set_references(self, document_id: int, refs: list[dict], source: str = "manuell") -> None:
         self._doc_row(document_id)
         with self.v.tx():
-            self.v.execute("DELETE FROM reference_number WHERE document_id = ?", (document_id,))
-            seen = set()
+            if source == "manuell":
+                self.v.execute("DELETE FROM reference_number WHERE document_id = ?", (document_id,))
+                seen = set()
+            else:
+                self.v.execute(
+                    "DELETE FROM reference_number WHERE document_id = ? AND source <> 'manuell'"
+                    " AND confirmed = 0",
+                    (document_id,),
+                )
+                seen = {(r["type"], r["value_norm"]) for r in self.document_references(document_id)}
             for r in refs:
                 typ, value = r.get("type"), str(r.get("value", "")).strip()
                 if typ not in REF_TYPES or not value:
@@ -448,6 +456,10 @@ class Repo:
                     (document_id, typ, value[:80], norm, r.get("source", source),
                      1 if r.get("confirmed", source == "manuell") else 0),
                 )  # fmt: skip
+            if source == "manuell":
+                from .linking import Linking
+
+                Linking(self).suggest(document_id)
 
     def document_references(self, document_id: int) -> list[dict]:
         return self.v.rows(
@@ -524,10 +536,12 @@ class Repo:
         return doc
 
     def latest_extractions(self, document_id: int) -> list[dict]:
-        run = self.v.scalar(
-            "SELECT run_id FROM extraction WHERE document_id = ? ORDER BY id DESC LIMIT 1",
-            (document_id,),
-        )
+        run = self.v.scalar("SELECT last_extraction_run FROM document WHERE id = ?", (document_id,))
+        if run is None:
+            run = self.v.scalar(
+                "SELECT run_id FROM extraction WHERE document_id = ? ORDER BY id DESC LIMIT 1",
+                (document_id,),
+            )
         if not run:
             return []
         return self.v.rows(
@@ -554,6 +568,7 @@ class Repo:
         sort: str = "datum_ab",
         limit: int = 50,
         offset: int = 0,
+        after_id: int | None = None,
     ) -> dict:
         where, params = [], []
         if archived == "nein":
@@ -620,16 +635,27 @@ class Repo:
             "betrag_ab": "d.amount_cents DESC, d.id DESC",
             "betrag_auf": "d.amount_cents ASC, d.id ASC",
             "import_ab": "d.id DESC",
+            "import_auf": "d.id ASC",
             "firma": "c.name COLLATE NOCASE ASC, d.id DESC",
         }.get(sort)
         if not order:
             raise ArchiveError("Ungültige Sortierung.", "ungueltig")
+        if after_id is not None and (sort != "import_auf" or offset):
+            raise ArchiveError(
+                "Der Dokument-Cursor erfordert die Sortierung nach Eingang.", "ungueltig"
+            )
         clause = (" WHERE " + " AND ".join(where)) if where else ""
         total = self.v.scalar(f"SELECT count(*){DOC_FROM}{clause}", params)
+        if after_id is not None:
+            clause += (" AND " if clause else " WHERE ") + "d.id > ?"
+            params.append(after_id)
+        page_size = max(1, min(limit, 500))
         rows = self.v.rows(
             f"SELECT {DOC_COLUMNS}{DOC_FROM}{clause} ORDER BY {order} LIMIT ? OFFSET ?",
-            [*params, max(1, min(limit, 500)), max(0, offset)],
+            [*params, page_size + (1 if after_id is not None else 0), max(0, offset)],
         )
+        has_more = after_id is not None and len(rows) > page_size
+        rows = rows[:page_size]
         items = [self.decorate(r) for r in rows]
         if items:
             tags: dict[int, list[dict]] = {}
@@ -642,7 +668,10 @@ class Repo:
                 tags.setdefault(t.pop("document_id"), []).append(t)
             for i in items:
                 i["tags"] = tags.get(i["id"], [])
-        return {"items": items, "total": total}
+        result = {"items": items, "total": total}
+        if after_id is not None:
+            result["has_more"] = has_more
+        return result
 
     # --- Aenderungen
 
@@ -681,6 +710,10 @@ class Repo:
         fields = self._validate_fields(fields)
         with self.v.tx():
             self._apply_fields(document_id, fields, by)
+            if {"company_id", "doc_date", "doc_type"} & fields.keys():
+                from .linking import Linking
+
+                Linking(self).suggest(document_id)
         return self.get_document(document_id)
 
     def _apply_fields(self, document_id: int, fields: dict, by: str) -> None:
@@ -752,6 +785,9 @@ class Repo:
                 (now_iso(), document_id),
             )
             self.v.audit("document.confirmed", document_id=document_id)
+            from .linking import Linking
+
+            Linking(self).suggest(document_id)
         return self.get_document(document_id)
 
     def batch_confirm(self, document_ids: list[int] | None = None) -> dict:
@@ -761,23 +797,38 @@ class Repo:
             raise ArchiveError("Die Sammelbestätigung ist ausgeschaltet.", "abgeschaltet", 403)
         threshold = float(s["batch_confirm_threshold"])
         confirmed, skipped = [], []
-        cands = document_ids or [
-            r["id"]
-            for r in self.v.rows("SELECT id FROM document WHERE state='erkannt' AND archived=0")
-        ]
+        cands = (
+            document_ids
+            if document_ids is not None
+            else [
+                r["id"]
+                for r in self.v.rows("SELECT id FROM document WHERE state='erkannt' AND archived=0")
+            ]
+        )
         for did in cands:
             doc = self._doc_row(did)
-            ok = doc["state"] == "erkannt" and doc["company_id"] is not None
+            ok = (
+                doc["state"] == "erkannt"
+                and not doc["archived"]
+                and doc["company_id"] is not None
+                and doc["amount_cents"] is not None
+            )
             conf = {e["field"]: e["confidence"] for e in self.latest_extractions(did)}
             for field in ("firma", "datum", "betrag"):
-                if field == "betrag" and doc["amount_cents"] is None:
-                    continue
                 if conf.get(field, 0) < threshold:
                     ok = False
             if doc["doc_date"] is None:
                 ok = False
             if self.v.scalar(
                 "SELECT count(*) FROM deadline WHERE document_id = ? AND confirmed = 0", (did,)
+            ):
+                ok = False
+            if self.v.scalar(
+                "SELECT count(*) FROM job WHERE document_id = ? AND state IN ('wartend','laeuft')",
+                (did,),
+            ) or self.v.scalar(
+                "SELECT state = 'fehler' FROM job WHERE document_id = ? ORDER BY id DESC LIMIT 1",
+                (did,),
             ):
                 ok = False
             if ok:
@@ -797,7 +848,20 @@ class Repo:
 
     def restore_document(self, document_id: int) -> dict:
         self._doc_row(document_id)
-        self.v.restore(document_id)
+        with self.v.tx():
+            self.v.restore(document_id)
+            if self.v.scalar(
+                "SELECT count(*) FROM document WHERE id = ? AND state = 'eingegangen'",
+                (document_id,),
+            ) and not self.v.scalar(
+                "SELECT count(*) FROM job WHERE document_id = ? AND state IN ('wartend','laeuft')",
+                (document_id,),
+            ):
+                self.v.execute(
+                    "INSERT INTO job (document_id, kind, state, created_at, updated_at)"
+                    " VALUES (?,'process','wartend',?,?)",
+                    (document_id, now_iso(), now_iso()),
+                )
         return self.get_document(document_id)
 
     def set_paid(self, document_id: int, paid: bool, paid_at: str | None = None) -> dict:

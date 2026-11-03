@@ -210,6 +210,23 @@ def test_never_delete_documents(repo):
         repo.v.execute("DELETE FROM document WHERE id = ?", (doc,))
 
 
+def test_restore_discarded_import_queues_recognition(repo, tmp_path):
+    imports = ImportService(repo, tmp_path / "staging")
+    staged = imports.stage_uploads([("discarded.png", png(71))])
+    batch = imports.pending()[0]
+    result = imports.commit(staged["batch_id"], [], [batch["files"][0]["id"]])
+    doc = result["archived"][0]
+    assert repo.v.scalar("SELECT count(*) FROM job WHERE document_id = ?", (doc,)) == 0
+    repo.restore_document(doc)
+    repo.restore_document(doc)
+    assert (
+        repo.v.scalar(
+            "SELECT count(*) FROM job WHERE document_id = ? AND state = 'wartend'", (doc,)
+        )
+        == 1
+    )
+
+
 # ---------------------------------------------------------------- Fristen
 
 
@@ -262,10 +279,12 @@ def test_snooze_returns_later(repo, clock):
     clock.d = date(2024, 6, 2)
     dl.tick()
     rid = dl.due_reminders()[0]["reminder_id"]
+    assert len(dl.take_notifications()) == 1
     dl.snooze(rid, 1)
     assert dl.due_reminders() == []
     clock.d = date(2024, 6, 3)
     assert len(dl.tick()["fired"]) == 1
+    assert [n["reminder_id"] for n in dl.take_notifications()] == [rid]
 
 
 def test_paid_closes_payment_deadlines(repo, clock):
@@ -279,13 +298,69 @@ def test_paid_closes_payment_deadlines(repo, clock):
     assert dl.list() == []
     repo.set_paid(d, False)
     assert len(dl.list()) == 1
-    assert repo.v.scalar(
-        "SELECT count(*) FROM reminder WHERE deadline_id IN"
-        " (SELECT id FROM deadline WHERE document_id = ?) AND state = 'offen'",
-        (d,),
-    ) == 2
+    assert (
+        repo.v.scalar(
+            "SELECT count(*) FROM reminder WHERE deadline_id IN"
+            " (SELECT id FROM deadline WHERE document_id = ?) AND state = 'offen'",
+            (d,),
+        )
+        == 2
+    )
     clock.d = date(2024, 6, 25)
     assert len(dl.tick()["fired"]) == 1
+
+
+def test_paid_document_still_reminds_about_contracts(repo, clock):
+    d = reviewed(repo, [{"type": "vertragsende", "due_date": "2024-06-05", "lead_days": [1]}])
+    repo.set_paid(d, True)
+    dl = Deadlines(repo)
+    payment = dl.create(d, {"type": "zahlungsziel", "due_date": "2024-06-10"})
+    assert payment["status"] == "erledigt"
+    clock.d = date(2024, 6, 4)
+    assert len(dl.tick()["fired"]) == 1
+    assert dl.due_reminders()[0]["type"] == "vertragsende"
+
+
+def test_expired_contract_reminder_is_caught_up_and_can_be_snoozed(repo, clock):
+    reviewed(repo, [{"type": "kuendigungsfrist", "due_date": "2024-06-05", "lead_days": [7, 1]}])
+    dl = Deadlines(repo)
+    clock.d = date(2024, 6, 8)
+    assert len(dl.tick()["fired"]) == 1
+    reminder = dl.due_reminders()[0]
+    assert reminder["status"] == "abgelaufen"
+    assert len(dl.take_notifications()) == 1
+    dl.snooze(reminder["reminder_id"], 1)
+    clock.d = date(2024, 6, 9)
+    assert len(dl.tick()["fired"]) == 1
+    assert len(dl.take_notifications()) == 1
+
+
+def test_completed_monthly_deadline_repeats_without_date_drift(repo, clock):
+    d = reviewed(repo, [{"type": "sonstige", "due_date": "2024-01-31", "repeat_months": 1}])
+    dl = Deadlines(repo)
+    original = repo.v.scalar("SELECT id FROM deadline WHERE document_id = ?", (d,))
+    dl.complete(original)
+    clock.d = date(2024, 2, 1)
+    dl.tick()
+    february = dl.list()[0]
+    assert february["due_date"] == "2024-02-29"
+    clock.d = date(2024, 3, 1)
+    dl.tick()
+    assert [item["due_date"] for item in dl.list()] == ["2024-03-31"]
+    dl.tick()
+    assert repo.v.scalar("SELECT count(*) FROM deadline WHERE document_id = ?", (d,)) == 3
+
+
+def test_manually_changed_repeat_date_becomes_new_anchor(repo, clock):
+    reviewed(repo, [{"type": "sonstige", "due_date": "2024-01-31", "repeat_months": 1}])
+    dl = Deadlines(repo)
+    clock.d = date(2024, 2, 1)
+    dl.tick()
+    current = dl.list()[0]
+    dl.update(current["id"], {"due_date": "2024-02-15"})
+    clock.d = date(2024, 2, 16)
+    dl.tick()
+    assert [item["due_date"] for item in dl.list()] == ["2024-03-15"]
 
 
 def test_reopening_deadline_recreates_its_reminders(repo, clock):
@@ -303,9 +378,13 @@ def test_reopening_deadline_recreates_its_reminders(repo, clock):
     assert dl.due_reminders() == []
     dl.complete(deadline_id, False)
 
-    assert repo.v.scalar(
-        "SELECT count(*) FROM reminder WHERE deadline_id = ? AND state = 'offen'", (deadline_id,)
-    ) == 2
+    assert (
+        repo.v.scalar(
+            "SELECT count(*) FROM reminder WHERE deadline_id = ? AND state = 'offen'",
+            (deadline_id,),
+        )
+        == 2
+    )
     assert len(dl.tick()["fired"]) == 1
 
 
@@ -388,8 +467,9 @@ def test_link_suggestions_and_rejection_is_remembered(repo):
     link.reject(by_other[c]["id"])
     assert c not in {s["other"]["id"] for s in link.suggest(b)}
     link.confirm(by_other[a]["id"])
-    assert [x["status"] for x in link.links(a)] == ["bestaetigt"]
-    assert link.links(a)[0]["direction"] == "eingehend"
+    confirmed = link.links(a, include_suggested=False)
+    assert [x["status"] for x in confirmed] == ["bestaetigt"]
+    assert confirmed[0]["direction"] == "eingehend"
 
 
 def test_company_alone_gives_no_suggestion(repo):
@@ -400,6 +480,20 @@ def test_company_alone_gives_no_suggestion(repo):
             d, {"doc_date": "2024-01-05"}, company_name="Allianz", create_company=True
         )
     assert Linking(repo).suggest(a) == []
+
+
+def test_manual_reference_and_company_changes_refresh_suggestions(repo):
+    a, b = make_doc(repo), make_doc(repo)
+    company = repo.create_company("Test GmbH")
+    repo.update_document(a, {"company_id": company["id"]})
+    repo.update_document(b, {"company_id": company["id"]})
+    ref = [{"type": "vertragsnummer", "value": "V-12345"}]
+    repo.set_references(a, ref)
+    repo.set_references(b, ref)
+    assert Linking(repo).links(a)[0]["score"] == 100
+    other = repo.create_company("Andere GmbH")
+    repo.update_document(b, {"company_id": other["id"]})
+    assert Linking(repo).links(a)[0]["score"] == 60
 
 
 # ---------------------------------------------------------------- Erkennung (echte OCR)
@@ -488,12 +582,75 @@ def test_pipeline_reprocess_removes_stale_ocr_text_and_index(repo):
     )
 
     assert repo.v.search("Suchtreffer") == []
-    assert repo.v.scalar(
-        "SELECT count(*) FROM ocr_text WHERE document_id = ? AND page > 1", (doc_id,)
-    ) == 0
-    assert repo.v.scalar(
-        "SELECT text FROM ocr_text WHERE document_id = ? AND page = 1", (doc_id,)
-    ) == ""
+    assert (
+        repo.v.scalar("SELECT count(*) FROM ocr_text WHERE document_id = ? AND page > 1", (doc_id,))
+        == 0
+    )
+    assert (
+        repo.v.scalar("SELECT text FROM ocr_text WHERE document_id = ? AND page = 1", (doc_id,))
+        == ""
+    )
+
+
+def test_pipeline_reports_partial_failure_and_keeps_successful_text(repo):
+    first, second = png(91), png(92)
+    doc_id, _ = repo.v.add_document("multi.png", "image/png", [first, second])
+
+    def partial(data, mime, lang=None):
+        if data == second:
+            raise ocr.UnreadableFileError("unlesbar")
+        return [ocr.PageText("Erkennbarer Suchbegriff", 0.9)]
+
+    result = process_document(repo, doc_id, recognise=partial)
+    assert result["error"] == "erkennung_unvollstaendig"
+    assert repo.v.search("Suchbegriff") == [doc_id]
+
+
+def test_empty_reprocess_clears_previous_extraction_but_preserves_manual_changes(repo):
+    doc_id = make_doc(repo)
+    process_document(repo, doc_id, recognise=fake_recognise("Rechnung Gesamtbetrag 5,00 €"))
+    assert repo.get_document(doc_id)["amount_cents"] == 500
+    process_document(repo, doc_id, recognise=lambda data, mime, lang=None: [])
+    assert repo.get_document(doc_id)["amount_cents"] is None
+    assert repo.latest_extractions(doc_id) == []
+
+    process_document(repo, doc_id, recognise=fake_recognise("Rechnung Gesamtbetrag 5,00 €"))
+    repo.update_document(doc_id, {"amount_cents": 1234})
+    process_document(repo, doc_id, recognise=lambda data, mime, lang=None: [])
+    assert repo.get_document(doc_id)["amount_cents"] == 1234
+    assert repo.latest_extractions(doc_id) == []
+
+
+def test_reprocess_preserves_manual_references(repo):
+    doc_id = make_doc(repo)
+    repo.set_references(doc_id, [{"type": "vertragsnummer", "value": "V-12345"}])
+    process_document(repo, doc_id, recognise=lambda data, mime, lang=None: [])
+    assert [ref["value"] for ref in repo.document_references(doc_id)] == ["V-12345"]
+
+
+def test_reprocess_preserves_changes_made_while_ocr_runs(repo):
+    doc_id = make_doc(repo)
+    process_document(repo, doc_id, recognise=fake_recognise("Rechnung\nGesamtbetrag 12,34 EUR"))
+
+    def update_during_ocr(data, mime, lang=None):
+        repo.update_document(doc_id, {"amount_cents": 9876})
+        return [ocr.PageText("Rechnung\nGesamtbetrag 45,67 EUR", 0.95)]
+
+    process_document(repo, doc_id, recognise=update_during_ocr)
+    assert repo.get_document(doc_id)["amount_cents"] == 9876
+
+
+def test_ocr_processes_all_pages_of_long_documents(monkeypatch):
+    import io
+
+    from PIL import Image
+
+    frames = [Image.new("RGB", (4, 4), (i, 0, 0)) for i in range(61)]
+    monkeypatch.setattr(ocr, "ocr_image", lambda img, lang=None: ocr.PageText("Seite", 1.0))
+    for fmt, mime in (("TIFF", "image/tiff"), ("PDF", "application/pdf")):
+        buf = io.BytesIO()
+        frames[0].save(buf, format=fmt, save_all=True, append_images=frames[1:])
+        assert len(ocr.recognise(buf.getvalue(), mime)) == 61
 
 
 def test_backup_failure_removes_partial_temporary_file(repo, tmp_path, monkeypatch):
@@ -525,6 +682,17 @@ def test_batch_confirm_only_high_confidence(repo):
         repo.batch_confirm()
 
 
+def test_batch_confirm_skips_missing_amount(repo):
+    repo.create_company("Telekom GmbH")
+    doc = make_doc(repo)
+    process_document(
+        repo, doc, recognise=fake_recognise("Telekom GmbH\nRechnung\nDatum: 05.02.2024\n")
+    )
+    assert repo.get_document(doc)["amount_cents"] is None
+    assert repo.batch_confirm([doc]) == {"confirmed": [], "skipped": [doc]}
+    assert repo.batch_confirm([]) == {"confirmed": [], "skipped": []}
+
+
 # ---------------------------------------------------------------- Jobs
 
 
@@ -552,6 +720,19 @@ def test_job_queue_runs_and_recovers(repo):
     q2.enqueue(doc)
     q2.run_pending()
     assert q2.counts()["fehler"] == 1
+
+
+def test_job_counts_ignore_failures_superseded_by_retry(repo):
+    doc = make_doc(repo)
+    q = JobQueue(repo.v, lambda did: {"error": "datei_unlesbar"})
+    q.enqueue(doc)
+    q.run_pending()
+    assert q.counts()["fehler"] == 1
+    q.handler = lambda did: {"error": None}
+    q.enqueue(doc)
+    assert q.counts()["wartend"] == 1 and q.counts()["fehler"] == 0
+    q.run_pending()
+    assert q.counts()["fertig"] == 1 and q.counts()["fehler"] == 0
 
 
 # ---------------------------------------------------------------- Import
@@ -599,6 +780,43 @@ def test_import_rejects_oversize_and_duplicates(repo, tmp_path):
     b2 = imp.pending()[0]
     out = imp.commit(b2["id"], [[b2["files"][0]["id"]]])
     assert out["created"] == [] and len(out["duplicates"]) == 1
+
+
+def test_space_saving_compresses_photos_and_preserves_duplicate_identity(repo, tmp_path):
+    import io
+
+    from PIL import Image
+
+    buf = io.BytesIO()
+    Image.new("RGB", (3200, 2400), "white").save(buf, "PNG")
+    photo = buf.getvalue()
+    imp = ImportService(repo, tmp_path / "eingang")
+    repo.update_settings({"space_saving": True})
+    staged = imp.stage_uploads([("photo.png", photo)])
+    batch = imp.pending()[0]
+    doc_id = imp.commit(staged["batch_id"], [[batch["files"][0]["id"]]])["created"][0]
+    part = repo.get_document(doc_id)["parts"][0]
+    data = repo.v.read_page(doc_id, 1)
+    assert part["mime"] == "image/webp" and part["name"] == "photo.webp"
+    assert len(data) < len(photo)
+    with Image.open(io.BytesIO(data)) as saved:
+        assert saved.size == (2500, 1875)
+
+    repo.update_settings({"space_saving": False})
+    staged = imp.stage_uploads([("same.png", photo)])
+    batch = imp.pending()[0]
+    assert imp.commit(staged["batch_id"], [[batch["files"][0]["id"]]])["duplicates"] == [doc_id]
+
+
+def test_space_saving_failure_keeps_entire_import_pending(repo, tmp_path):
+    imp = ImportService(repo, tmp_path / "eingang")
+    repo.update_settings({"space_saving": True})
+    staged = imp.stage_uploads([("ok.png", png(71)), ("broken.png", b"\x89PNG\r\n\x1a\nbroken")])
+    batch = imp.pending()[0]
+    with pytest.raises(ArchiveError, match="nicht verkleinert"):
+        imp.commit(staged["batch_id"], [[f["id"]] for f in batch["files"]])
+    assert repo.v.scalar("SELECT count(*) FROM document") == 0
+    assert len(imp.pending()[0]["files"]) == 2
 
 
 # ---------------------------------------------------------------- Export / Statistik

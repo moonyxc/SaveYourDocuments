@@ -3,7 +3,7 @@
 Ein lokales Programm für Windows 11, das wichtige Dokumente (Versicherung, Kauf, Behörden, Verträge) vom Handy oder per Upload entgegennimmt, **selbst erkennt**, was es ist, und alles durchsuchbar in **einer verschlüsselten Datei** speichert. Es erinnert an Zahlungs- und Kündigungsfristen und wertet Ausgaben aus.
 
 - **Strikt lokal:** keine Cloud, kein Konto, kein KI-Dienst im Internet. Die Texterkennung läuft auf deinem Computer. Nur die Suche nach Updates fragt auf Wunsch die öffentliche Release-Liste bei GitHub ab (ohne Daten aus dem Archiv).
-- **Eine Datei:** das ganze Archiv (Originale, Texte, Vorschaubilder, Daten) liegt verschlüsselt in `archiv.syd`. Kopieren = sichern.
+- **Eine Datei:** das ganze Archiv (Originale, Texte, Vorschaubilder, Daten) liegt verschlüsselt in `archiv.syd`. Für eine Sicherung bei laufendem Programm **Einstellungen → Sicherung und Speicher → Jetzt sichern** verwenden. Die geöffnete Archivdatei nicht direkt kopieren: Dabei können aktuelle Änderungen fehlen. Alternativ das Programm vollständig beenden und erst dann die Archivdatei kopieren.
 - **Nie löschen, nur archivieren.**
 - **Deutsch**, dunkle Oberfläche, für Laien gemacht.
 

@@ -162,14 +162,21 @@ class Deadlines:
         return did
 
     def _insert(
-        self, document_id: int, spec: dict, source: str, parent_id: int | None = None
+        self,
+        document_id: int,
+        spec: dict,
+        source: str,
+        parent_id: int | None = None,
+        repeat_anchor: str | None = None,
     ) -> int:
         data = self._validate(spec)
         cur = self.v.execute(
             "INSERT INTO deadline (document_id, type, due_date, source, confirmed, repeat_months,"
-            " lead_days, status, note, parent_id, created_at) VALUES (?,?,?,?,1,?,?,'offen',?,?,?)",
+            " lead_days, status, note, parent_id, created_at, repeat_anchor)"
+            " VALUES (?,?,?,?,1,?,?,'offen',?,?,?,?)",
             (document_id, data["type"], data["due_date"], source, data["repeat_months"],
-             json.dumps(data["lead_days"]), data["note"], parent_id, now_iso()),
+             json.dumps(data["lead_days"]), data["note"], parent_id, now_iso(),
+             repeat_anchor or data["due_date"]),
         )  # fmt: skip
         return cur.lastrowid
 
@@ -177,7 +184,12 @@ class Deadlines:
         self.repo._doc_row(document_id)
         with self.v.tx():
             did = self._insert(document_id, spec, "manuell")
-            self._make_reminders(did)
+            if self._row(did)["type"] == "zahlungsziel" and self.v.scalar(
+                "SELECT paid FROM document WHERE id = ?", (document_id,)
+            ):
+                self.v.execute("UPDATE deadline SET status = 'erledigt' WHERE id = ?", (did,))
+            else:
+                self._make_reminders(did)
             self.v.audit("deadline.created", document_id=document_id)
         return self.get(did)
 
@@ -187,10 +199,13 @@ class Deadlines:
         with self.v.tx():
             self.v.execute(
                 "UPDATE deadline SET type=?, due_date=?, repeat_months=?, lead_days=?, note=?,"
+                " repeat_anchor = CASE WHEN due_date <> ? OR repeat_months <> ?"
+                " THEN ? ELSE repeat_anchor END,"
                 " status = CASE WHEN status = 'abgelaufen' AND ? >= ? THEN 'offen' ELSE status END"
                 " WHERE id=?",
                 (data["type"], data["due_date"], data["repeat_months"], json.dumps(data["lead_days"]),
-                 data["note"], data["due_date"], self.repo.today().isoformat(), deadline_id),
+                 data["note"], data["due_date"], data["repeat_months"], data["due_date"],
+                 data["due_date"], self.repo.today().isoformat(), deadline_id),
             )  # fmt: skip
             self.v.execute(
                 "DELETE FROM reminder WHERE deadline_id = ? AND state <> 'offen'", (deadline_id,)
@@ -340,12 +355,13 @@ class Deadlines:
         iso = today.isoformat()
         fired: list[int] = []
         with self.v.tx():
-            self._roll_repeats(today)
             rows = self.v.rows(
                 "SELECT r.id, r.deadline_id, r.due_on, r.state FROM reminder r"
                 " JOIN deadline dl ON dl.id = r.deadline_id JOIN document d ON d.id = dl.document_id"
-                " WHERE r.state IN ('offen','zurueckgestellt') AND dl.status = 'offen'"
-                " AND dl.confirmed = 1 AND d.state = 'geprueft' AND d.archived = 0 AND d.paid = 0"
+                " WHERE r.state IN ('offen','zurueckgestellt')"
+                " AND (dl.status = 'offen' OR (dl.status = 'abgelaufen' AND r.state = 'zurueckgestellt'))"
+                " AND dl.confirmed = 1 AND d.state = 'geprueft' AND d.archived = 0"
+                " AND (dl.type <> 'zahlungsziel' OR d.paid = 0)"
                 " AND ((r.state = 'offen' AND r.due_on <= ?)"
                 "   OR (r.state = 'zurueckgestellt' AND r.snoozed_until <= ?))"
                 " ORDER BY r.deadline_id, r.due_on DESC, r.id DESC",
@@ -373,28 +389,32 @@ class Deadlines:
                     (now_iso(), r["id"]),
                 )
                 fired.append(r["id"])
+            self._roll_repeats(today)
         return {"fired": fired}
 
     def _roll_repeats(self, today: date) -> None:
         passed = self.v.rows(
             "SELECT dl.* FROM deadline dl JOIN document d ON d.id = dl.document_id"
-            " WHERE dl.confirmed = 1 AND dl.status = 'offen' AND dl.due_date < ?"
+            " WHERE dl.confirmed = 1 AND (dl.status = 'offen'"
+            " OR (dl.status = 'erledigt' AND dl.repeat_months > 0)) AND dl.due_date < ?"
             " AND dl.type IN ('vertragsende','kuendigungsfrist','sonstige') AND d.archived = 0",
             (today.isoformat(),),
         )
         for dl in passed:
-            self.v.execute("UPDATE deadline SET status = 'abgelaufen' WHERE id = ?", (dl["id"],))
-            self.v.execute(
-                "UPDATE reminder SET state = 'erledigt' WHERE deadline_id = ? AND state <> 'erledigt'",
-                (dl["id"],),
-            )
+            if dl["status"] == "offen":
+                self.v.execute(
+                    "UPDATE deadline SET status = 'abgelaufen' WHERE id = ?", (dl["id"],)
+                )
             if not dl["repeat_months"] or self._cancelled(dl["document_id"]):
                 continue
             due = date.fromisoformat(dl["due_date"])
-            step = 0
+            anchor = date.fromisoformat(dl["repeat_anchor"] or dl["due_date"])
+            step = max(
+                0, ((due.year - anchor.year) * 12 + due.month - anchor.month) // dl["repeat_months"]
+            )
             while due < today:
                 step += 1
-                due = add_months(date.fromisoformat(dl["due_date"]), dl["repeat_months"] * step)
+                due = add_months(anchor, dl["repeat_months"] * step)
             exists = self.v.scalar("SELECT count(*) FROM deadline WHERE parent_id = ?", (dl["id"],))
             if exists:
                 continue
@@ -409,6 +429,7 @@ class Deadlines:
                 },
                 "wiederholung",
                 parent_id=dl["id"],
+                repeat_anchor=anchor.isoformat(),
             )
             self._make_reminders(nid)
 
@@ -449,7 +470,7 @@ class Deadlines:
             raise _bad("Zurückstellen ist für 1 bis 90 Tage möglich.")
         until = (self.repo.today() + timedelta(days=days)).isoformat()
         self.v.execute(
-            "UPDATE reminder SET state = 'zurueckgestellt', snoozed_until = ? WHERE id = ?",
+            "UPDATE reminder SET state = 'zurueckgestellt', snoozed_until = ?, notified = 0 WHERE id = ?",
             (until, reminder_id),
         )
 

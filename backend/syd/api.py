@@ -350,12 +350,13 @@ def create_app(
         sort: str = "datum_ab",
         limit: int = Query(50, ge=1, le=500),
         offset: int = Query(0, ge=0),
+        after_id: int | None = Query(None, ge=0),
     ):
         return state.repo.list_documents(
             q=q, company_id=company_id, doc_type=doc_type, category_id=category_id,
             date_from=date_from, date_to=date_to, amount_min=amount_min, amount_max=amount_max,
             tag_ids=_ids(tag_ids), paid=paid, state=state_, archived=archived, sort=sort,
-            limit=limit, offset=offset,
+            limit=limit, offset=offset, after_id=after_id,
         )  # fmt: skip
 
     @app.post("/api/documents/confirm-batch")
@@ -370,7 +371,7 @@ def create_app(
         d["deadlines"] = state.deadlines.suggestions(doc_id)
         d["links"] = state.linking.links(doc_id)
         d["job"] = state.vault.row(
-            "SELECT state, error_code FROM job WHERE document_id = ? ORDER BY id DESC LIMIT 1",
+            "SELECT id, state, error_code FROM job WHERE document_id = ? ORDER BY id DESC LIMIT 1",
             (doc_id,),
         )
         return d
@@ -408,6 +409,7 @@ def create_app(
     @app.post("/api/documents/{doc_id}/restore")
     def restore_document(doc_id: int):
         state.repo.restore_document(doc_id)
+        state.jobs.notify()
         state.hub.publish("documents.changed", document_id=doc_id)
         return _detail(doc_id)
 
@@ -430,8 +432,8 @@ def create_app(
     @app.post("/api/documents/{doc_id}/reprocess")
     def reprocess(doc_id: int):
         state.repo.get_document(doc_id)
-        state.jobs.enqueue(doc_id)
-        return {"queued": True}
+        job_id = state.jobs.enqueue(doc_id)
+        return {"queued": True, "job_id": job_id}
 
     @app.get("/api/documents/{doc_id}/text")
     def document_text(doc_id: int):
@@ -717,8 +719,12 @@ def create_app(
 
     # --- Auswertung --------------------------------------------------------------------
 
-    def _stats(group_by, date_from, date_to, doc_types, company_id, category_id, paid):
-        types = None if doc_types is None else [t for t in doc_types.split("|") if t]
+    def _stats(group_by, date_from, date_to, doc_types, company_id, category_id, paid, include_all):
+        types = (
+            ([] if include_all else None)
+            if doc_types is None
+            else [t for t in doc_types.split("|") if t]
+        )
         return stats.stats(
             state.repo, group_by=group_by, date_from=date_from, date_to=date_to,
             doc_types=types, company_id=company_id, category_id=category_id, paid=paid,
@@ -733,8 +739,11 @@ def create_app(
         company_id: int | None = None,
         category_id: int | None = None,
         paid: bool | None = None,
+        include_all: bool = False,
     ):
-        return _stats(group_by, date_from, date_to, doc_types, company_id, category_id, paid)
+        return _stats(
+            group_by, date_from, date_to, doc_types, company_id, category_id, paid, include_all
+        )
 
     @app.get("/api/stats.csv")
     def get_stats_csv(
@@ -745,8 +754,11 @@ def create_app(
         company_id: int | None = None,
         category_id: int | None = None,
         paid: bool | None = None,
+        include_all: bool = False,
     ):
-        res = _stats(group_by, date_from, date_to, doc_types, company_id, category_id, paid)
+        res = _stats(
+            group_by, date_from, date_to, doc_types, company_id, category_id, paid, include_all
+        )
         return _csv_response(stats.to_csv(res), f"auswertung-{group_by}.csv")
 
     # --- Export ------------------------------------------------------------------------
@@ -785,7 +797,12 @@ def create_app(
     @app.post("/api/export/plan")
     def export_plan(body: dict = Body(...)):
         plan = _plan(body)
-        return {"items": plan[:200], "total": len(plan)}
+        return {
+            "items": plan[:200],
+            "total": len(plan),
+            "documents": len({item["document_id"] for item in plan}),
+            "archived": sum(bool(item["archived"]) for item in plan),
+        }
 
     @app.post("/api/export/run")
     def export_run(body: dict = Body(...)):
@@ -1010,7 +1027,10 @@ def create_app(
     @app.post("/api/dev/reprocess-failed")
     def dev_reprocess_failed():
         _dev()
-        rows = state.vault.rows("SELECT DISTINCT document_id FROM job WHERE state = 'fehler'")
+        rows = state.vault.rows(
+            "SELECT document_id FROM job j WHERE state = 'fehler'"
+            " AND id = (SELECT MAX(id) FROM job WHERE document_id = j.document_id)"
+        )
         for r in rows:
             state.jobs.enqueue(r["document_id"])
         return {"queued": len(rows)}

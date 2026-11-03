@@ -50,7 +50,7 @@ export type DocDetail = {
   extractions: Extraction[];
   deadlines: Deadline[];
   links: DocLink[];
-  job: { state: string; error_code: string | null } | null;
+  job: { id: number; state: string; error_code: string | null } | null;
 };
 
 export type QueueItem = {
@@ -107,6 +107,8 @@ export const JOB_ERRORS: Record<string, string> = {
     "Die Texterkennung steht auf diesem Computer nicht zur Verfügung. Du kannst die Angaben von Hand eintragen. Hinweise zur Einrichtung findest du in den Einstellungen unter System.",
   datei_unlesbar:
     "Die Datei konnte nicht gelesen werden. Sieh dir das Original an. Ist es beschädigt, fotografiere oder scanne es neu.",
+  erkennung_unvollstaendig:
+    "Ein Teil des Dokuments konnte nicht erkannt werden. Prüfe alle Seiten im Original; die Suche ist möglicherweise unvollständig.",
   interner_fehler: "Beim Erkennen ist ein Fehler aufgetreten. Versuche es noch einmal oder trage die Angaben von Hand ein.",
 };
 

@@ -140,7 +140,7 @@ def test_partial_accept_and_disallowed_types(tmp_path):
     assert c.post(f"{API}/prepare-upload", json=only_exe).status_code == 403
 
 
-def test_second_session_blocked_then_cancel_cleans_up(tmp_path):
+def test_second_session_blocked_then_cancel_preserves_received_files(tmp_path):
     r, c, batches = make(tmp_path)
     body = prepare_body(
         (file_meta("a", "x.jpg", JPEG), JPEG), (file_meta("b", "y.jpg", JPEG), JPEG)
@@ -149,8 +149,8 @@ def test_second_session_blocked_then_cancel_cleans_up(tmp_path):
     assert c.post(f"{API}/prepare-upload", json=body).status_code == 409
     upload(c, first["sessionId"], "a", first["files"]["a"], JPEG)
     assert c.post(f"{API}/cancel", params={"sessionId": first["sessionId"]}).status_code == 200
-    assert r.session is None and batches == []
-    assert list((tmp_path / "q").iterdir()) == []
+    assert r.session is None and len(batches) == 1
+    assert batches[0].files[0].path.read_bytes() == JPEG
     assert c.post(f"{API}/prepare-upload", json=body).status_code == 200
 
 
@@ -160,6 +160,82 @@ def test_stale_session_expires(tmp_path):
     assert c.post(f"{API}/prepare-upload", json=body).status_code == 200
     time.sleep(0.1)
     assert c.post(f"{API}/prepare-upload", json=body).status_code == 200
+
+
+def test_stale_partial_session_preserves_received_files(tmp_path):
+    r, c, batches = make(tmp_path, session_timeout=0.05)
+    body = prepare_body(
+        (file_meta("a", "x.jpg", JPEG), JPEG), (file_meta("b", "y.jpg", JPEG), JPEG)
+    )
+    first = c.post(f"{API}/prepare-upload", json=body).json()
+    assert upload(c, first["sessionId"], "a", first["files"]["a"], JPEG).status_code == 200
+    time.sleep(0.1)
+    assert c.post(f"{API}/prepare-upload", json=body).status_code == 200
+    assert len(batches) == 1
+    assert batches[0].files[0].path.read_bytes() == JPEG
+
+
+def test_partial_session_expires_without_another_request(tmp_path):
+    async def run():
+        batches = []
+
+        async def accept(device, files):
+            return {f.id for f in files}
+
+        async def data():
+            yield JPEG
+
+        receiver = Receiver(
+            tmp_path / "q", decider=accept, on_batch=batches.append, session_timeout=0.1
+        )
+        body = prepare_body(
+            (file_meta("a", "x.jpg", JPEG), JPEG), (file_meta("b", "y.jpg", JPEG), JPEG)
+        )
+        _, prepared = await receiver.prepare_upload(body, "127.0.0.1", None)
+        assert (
+            await receiver.receive_file(
+                prepared["sessionId"], "a", prepared["files"]["a"], "127.0.0.1", data()
+            )
+        )[0] == 200
+        await asyncio.sleep(0.25)
+        assert receiver.session is None and len(batches) == 1
+        assert batches[0].files[0].path.read_bytes() == JPEG
+
+    asyncio.run(run())
+
+
+def test_cancel_waits_for_inflight_upload_before_registering(tmp_path):
+    async def run():
+        batches = []
+        started, release = asyncio.Event(), asyncio.Event()
+
+        async def accept(device, files):
+            return {f.id for f in files}
+
+        async def data():
+            started.set()
+            await release.wait()
+            yield JPEG
+
+        receiver = Receiver(tmp_path / "q", decider=accept, on_batch=batches.append)
+        body = prepare_body(
+            (file_meta("a", "x.jpg", JPEG), JPEG), (file_meta("b", "y.jpg", JPEG), JPEG)
+        )
+        _, prepared = await receiver.prepare_upload(body, "127.0.0.1", None)
+        task = asyncio.create_task(
+            receiver.receive_file(
+                prepared["sessionId"], "a", prepared["files"]["a"], "127.0.0.1", data()
+            )
+        )
+        await started.wait()
+        assert await receiver.cancel(prepared["sessionId"], "127.0.0.1")
+        assert batches == []
+        release.set()
+        assert (await task)[0] == 200
+        assert receiver.session is None and len(batches) == 1
+        assert batches[0].files[0].path.read_bytes() == JPEG
+
+    asyncio.run(run())
 
 
 def test_pin(tmp_path):
@@ -349,9 +425,7 @@ def test_multicast_uses_a_socket_and_announcement_burst_per_interface(monkeypatc
     async def registrar(_ip, _message):
         return None
 
-    monkeypatch.setattr(
-        "asyncio.BaseEventLoop.create_datagram_endpoint", create_endpoint
-    )
+    monkeypatch.setattr("asyncio.BaseEventLoop.create_datagram_endpoint", create_endpoint)
     monkeypatch.setattr("syd.localsend.multicast_interfaces", lambda _port: interfaces)
     monkeypatch.setattr("syd.localsend.ANNOUNCEMENT_DELAYS", (0, 0, 0))
 
@@ -365,16 +439,15 @@ def test_multicast_uses_a_socket_and_announcement_burst_per_interface(monkeypatc
         assert len(created) == len(interfaces)
         for (sock, transport), interface in zip(created, interfaces, strict=True):
             assert sock.bound == ("", r.port) and sock.blocking is False
-            memberships = [value for _, opt, value in sock.options if opt == socket.IP_ADD_MEMBERSHIP]
-            outgoing = [value for _, opt, value in sock.options if opt == socket.IP_MULTICAST_IF]
-            assert memberships == [
-                socket.inet_aton("224.0.0.167") + socket.inet_aton(interface)
+            memberships = [
+                value for _, opt, value in sock.options if opt == socket.IP_ADD_MEMBERSHIP
             ]
+            outgoing = [value for _, opt, value in sock.options if opt == socket.IP_MULTICAST_IF]
+            assert memberships == [socket.inet_aton("224.0.0.167") + socket.inet_aton(interface)]
             assert outgoing == [socket.inet_aton(interface)]
             assert len(transport.sent) == 3
             assert all(
-                address == ("224.0.0.167", r.port)
-                and parse_announcement(payload)["announce"]
+                address == ("224.0.0.167", r.port) and parse_announcement(payload)["announce"]
                 for payload, address in transport.sent
             )
         transports.close()

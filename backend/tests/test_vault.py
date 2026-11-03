@@ -8,6 +8,7 @@ from syd.vault import (
     Vault,
     VaultMissingError,
     WrongKeyError,
+    _apply_key,
     format_recovery_key,
     generate_key,
     parse_recovery_key,
@@ -163,3 +164,31 @@ def test_migration_version(path):
         assert v.schema_version == len(MIGRATIONS)
     with Vault.open(path, key) as v:
         assert v.schema_version == len(MIGRATIONS)
+
+
+def test_existing_repeat_series_is_migrated_with_original_anchor(path):
+    key = generate_key()
+    conn = sqlcipher3.connect(str(path))
+    _apply_key(conn, key)
+    for migration in MIGRATIONS[:3]:
+        conn.executescript(migration)
+    conn.execute("PRAGMA user_version = 3")
+    conn.execute(
+        "INSERT INTO document (id, sha256, original_name, mime, pages, imported_at)"
+        " VALUES (1, 'hash', 'scan.png', 'image/png', 1, '2024-01-01')"
+    )
+    conn.execute(
+        "INSERT INTO deadline (id, document_id, type, due_date, source, repeat_months, created_at)"
+        " VALUES (1, 1, 'sonstige', '2024-01-31', 'manuell', 1, '2024-01-01')"
+    )
+    conn.execute(
+        "INSERT INTO deadline (id, document_id, type, due_date, source, repeat_months, parent_id, created_at)"
+        " VALUES (2, 1, 'sonstige', '2024-02-29', 'manuell', 1, 1, '2024-01-01')"
+    )
+    conn.commit()
+    conn.close()
+
+    with Vault.open(path, key) as vault:
+        rows = vault.rows("SELECT due_date, repeat_anchor FROM deadline ORDER BY id")
+        assert [row["repeat_anchor"] for row in rows] == ["2024-01-31", "2024-01-31"]
+        assert vault.scalar("SELECT last_extraction_run FROM document WHERE id = 1") is None

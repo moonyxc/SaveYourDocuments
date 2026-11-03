@@ -28,13 +28,11 @@ export default function Stats() {
   const [paid, setPaid] = useState("");
   const [group, setGroup] = useState<Group>("firma");
 
-  const meta = useQuery({ queryKey: ["meta"], queryFn: () => api.get<Json>("/api/meta"), staleTime: 60_000 });
   const companies = useQuery({ queryKey: ["companies"], queryFn: () => api.get<{ items: Json[] }>("/api/companies") });
   const categories = useQuery({ queryKey: ["categories"], queryFn: () => api.get<{ items: Json[] }>("/api/categories") });
 
-  const ready = !withAll || Boolean(meta.data);
   const base = {
-    doc_types: withAll ? (meta.data?.doc_types ?? []).join("|") : undefined,
+    include_all: withAll || undefined,
     company_id: company || undefined,
     category_id: category || undefined,
     paid: paid === "ja" ? true : paid === "nein" ? false : undefined,
@@ -45,7 +43,7 @@ export default function Stats() {
     useQuery({
       queryKey: ["stats", key, params],
       queryFn: () => api.get<Stats>("/api/stats", params),
-      enabled: ready && enabled,
+      enabled,
       placeholderData: keepPreviousData,
     });
 
@@ -58,7 +56,7 @@ export default function Stats() {
   const byFirma = fetchStats("firma", { ...scoped, group_by: "firma" });
   const byBereich = fetchStats("bereich", { ...scoped, group_by: "bereich" });
   const detail = fetchStats(group, { ...scoped, group_by: group }, group === "art");
-  const open = fetchStats("offen", { ...scoped, group_by: "firma", doc_types: base.doc_types, company_id: base.company_id, category_id: base.category_id, paid: false }, paid === "");
+  const open = fetchStats("offen", { ...scoped, group_by: "firma", paid: false }, paid === "");
 
   const detailData = group === "firma" ? byFirma.data : group === "bereich" ? byBereich.data : detail.data;
   const main = byFirma.data;
@@ -78,7 +76,7 @@ export default function Stats() {
 
   const csvHref = mediaUrl("/api/stats.csv", { ...scoped, group_by: group });
   const pick = (label: string) => go("docs", { q: label });
-  const loadingFirst = years.isLoading || (ready && byFirma.isLoading);
+  const loadingFirst = years.isLoading || byFirma.isLoading;
   const failed = years.error ?? byFirma.error ?? byBereich.error;
   const excluded = main?.excluded_types ?? [];
 

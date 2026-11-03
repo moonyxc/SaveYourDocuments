@@ -172,13 +172,13 @@ export default function ExportView() {
 
   const plan = useQuery({
     queryKey: ["export", "plan", debouncedBody],
-    queryFn: () => api.post<{ items: PlanItem[]; total: number }>("/api/export/plan", debouncedBody),
+    queryFn: () => api.post<{ items: PlanItem[]; total: number; documents: number; archived: number }>("/api/export/plan", debouncedBody),
     enabled: canPlan,
     placeholderData: keepPreviousData,
   });
   const total = canPlan ? (plan.data?.total ?? 0) : 0;
-  const documentsInPlan = new Set((plan.data?.items ?? []).map((i) => i.document_id)).size;
-  const archivedInPlan = (plan.data?.items ?? []).filter((i) => i.archived).length;
+  const documentsInPlan = plan.data?.documents ?? 0;
+  const archivedInPlan = plan.data?.archived ?? 0;
   const waiting = canPlan && (plan.isFetching || debouncedBody !== body);
   const ready = canPlan && !plan.isError && !waiting && total > 0;
 

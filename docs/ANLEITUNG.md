@@ -48,6 +48,7 @@ Dokumente werden **nie gelöscht**, nur archiviert.
 ## Sichern und Wiederherstellen
 
 - Das Programm sichert automatisch, mindestens täglich, und behält die letzten Sicherungen. Ziel und Anzahl stehen unter **Einstellungen → Sicherung & Speicher**.
+- Für eine aktuelle Sicherung bei laufendem Programm dort **Jetzt sichern** verwenden. Die geöffnete `archiv.syd` nicht direkt kopieren: Dabei können aktuelle Änderungen fehlen. Zum direkten Kopieren der Archivdatei das Programm zuerst vollständig beenden.
 - **Wichtig:** Kopiere ab und zu eine Sicherung auf einen USB-Stick oder eine externe Festplatte. Eine Sicherung auf demselben Computer schützt nicht vor einem Festplattenschaden.
 - **Wiederherstellen:** Programm beenden (Tray → Beenden), die Sicherungsdatei als `archiv.syd` in den Datenordner kopieren, Programm starten und den Wiederherstellungsschlüssel (oder das Passwort) eingeben. Auf einem neuen Computer wählst du beim ersten Start **Ich habe schon ein Archiv**.
 - Die Prüfung der Archivdatei läuft automatisch einmal pro Woche. Findet sie einen Fehler, erscheint eine Warnung auf der Startseite: dann eine Sicherung einspielen.

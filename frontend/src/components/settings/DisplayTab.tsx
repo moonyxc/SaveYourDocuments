@@ -216,8 +216,8 @@ function SpaceCard({ settings }: { settings: Json }) {
         testId="sw-space"
       />
       <p className="hint" style={{ marginLeft: "4.9rem" }}>
-        An: Neue Fotos werden kleiner abgespeichert. Das Archiv bleibt deutlich schlanker, das unveränderte Original ist
-        dann nicht mehr vorhanden. Schon gespeicherte Dokumente werden nicht verändert.
+        An: Neue einzelne Fotos werden verkleinert und als WebP gespeichert, wenn das Platz spart. Das unveränderte
+        Original ist dann nicht mehr vorhanden. PDF, mehrseitige Bilder und bereits gespeicherte Dokumente bleiben unverändert.
       </p>
       <FormError>{error}</FormError>
     </Section>

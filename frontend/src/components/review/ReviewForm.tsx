@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type FormEvent, type KeyboardEvent } from "react";
-import { useMutation, useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { api, ApiError, errorText } from "../../lib/api";
 import { centsToInput, parseEuro } from "../../lib/format";
 import { Badge, Field, Modal, Spinner, useUi } from "../ui";
@@ -36,10 +36,12 @@ type Draft = {
 
 /** Ungespeicherte Eingaben bleiben beim Blaettern erhalten. */
 const drafts = new Map<number, Draft>();
+const reprocessJobs = new Map<number, { id: number; before: Draft }>();
 let refSeq = 0;
 
 export function forgetDraft(id: number): void {
   drafts.delete(id);
+  reprocessJobs.delete(id);
 }
 
 const extraction = (d: DocDetail, k: FieldKey) => d.extractions.find((e) => e.field === EXTRACTION_NAME[k]);
@@ -63,6 +65,25 @@ function initDraft(d: DocDetail): Draft {
 }
 
 const comparable = (d: Draft) => JSON.stringify({ ...d, touched: undefined, newCompanyOk: undefined });
+
+function mergeReprocessedDraft(current: Draft, before: Draft, fresh: Draft): Draft {
+  const keep = <K extends keyof Draft>(key: K): Draft[K] =>
+    JSON.stringify(current[key]) === JSON.stringify(before[key]) ? fresh[key] : current[key];
+  return {
+    doc_type: keep("doc_type"),
+    company: keep("company"),
+    newCompanyOk: keep("newCompanyOk"),
+    category_id: keep("category_id"),
+    doc_date: keep("doc_date"),
+    amount: keep("amount"),
+    note: keep("note"),
+    paid: keep("paid"),
+    tag_ids: keep("tag_ids"),
+    refs: keep("refs"),
+    deadlines: keep("deadlines"),
+    touched: current.touched,
+  };
+}
 
 function OcrText({ docId }: { docId: number }) {
   const [open, setOpen] = useState(false);
@@ -195,6 +216,7 @@ export function ReviewForm({
   onOpenDoc: (id: number) => void;
 }) {
   const { toast, confirm } = useUi();
+  const qc = useQueryClient();
   const docId = detail.id;
   const initial = useRef<Draft>(initDraft(detail));
   const [d, setD] = useState<Draft>(() => drafts.get(docId) ?? initial.current);
@@ -204,12 +226,24 @@ export function ReviewForm({
   const [newTag, setNewTag] = useState("");
   const [newCat, setNewCat] = useState("");
   const [busy, setBusy] = useState(false);
+  const [reprocessJobId, setReprocessJobId] = useState<number | null>(() => reprocessJobs.get(docId)?.id ?? null);
   const formRef = useRef<HTMLFormElement>(null);
   const amountRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     drafts.set(docId, d);
   }, [docId, d]);
+
+  useEffect(() => {
+    if (reprocessJobId === null || detail.job?.id !== reprocessJobId ||
+        !["fertig", "fehler"].includes(detail.job.state)) return;
+    const before = reprocessJobs.get(docId)?.before ?? initial.current;
+    const fresh = initDraft(detail);
+    initial.current = fresh;
+    setD((current) => mergeReprocessedDraft(current, before, fresh));
+    reprocessJobs.delete(docId);
+    setReprocessJobId(null);
+  }, [detail, docId, reprocessJobId]);
 
   const companies = useQuery({ queryKey: ["companies"], queryFn: () => api.get<{ items: Company[] }>("/api/companies") });
   const categories = useQuery({ queryKey: ["categories"], queryFn: () => api.get<{ items: Category[] }>("/api/categories") });
@@ -281,9 +315,15 @@ export function ReviewForm({
   });
 
   const reprocess = useMutation({
-    mutationFn: () => api.post(`/api/documents/${docId}/reprocess`),
-    onSuccess: () => {
-      drafts.delete(docId);
+    mutationFn: () => api.post<{ queued: boolean; job_id: number }>(`/api/documents/${docId}/reprocess`),
+    onSuccess: ({ job_id }) => {
+      const clean = initDraft(detail);
+      initial.current = clean;
+      drafts.set(docId, clean);
+      reprocessJobs.set(docId, { id: job_id, before: clean });
+      setD(clean);
+      setReprocessJobId(job_id);
+      void qc.invalidateQueries({ queryKey: ["document", docId] });
       toast("Das Dokument wird neu erkannt.");
     },
     onError: (e) => toast(errorText(e), "bad"),
@@ -671,7 +711,7 @@ export function ReviewForm({
           {busy ? "Wird gespeichert …" : hasNext ? "Bestätigen und weiter" : "Bestätigen"}
         </button>
         <div className="row wrap">
-          <button className="btn secondary" type="button" onClick={() => void askReprocess()} disabled={reprocess.isPending}>
+          <button className="btn secondary" type="button" onClick={() => void askReprocess()} disabled={reprocess.isPending || reprocessJobId !== null}>
             Neu erkennen
           </button>
           <button className="btn ghost" type="button" onClick={() => setArchiving(true)}>

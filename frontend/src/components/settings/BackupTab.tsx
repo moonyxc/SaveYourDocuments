@@ -76,7 +76,7 @@ function BackupCard({ sys }: { sys: Json }) {
     <Section
       id="st-backup"
       title="Sicherungen"
-      intro="Das Programm legt einmal am Tag automatisch eine Sicherungskopie an, solange es läuft. Die ältesten Kopien werden ersetzt."
+      intro="Das Programm legt einmal am Tag automatisch eine Sicherungskopie an, solange es läuft. Die ältesten Kopien werden ersetzt. Kopiere bei laufendem Programm nicht die geöffnete Archivdatei, sondern verwende „Jetzt sichern“."
     >
       <dl className="st-kv">
         <dt>Letzte Sicherung</dt>

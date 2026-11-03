@@ -1,5 +1,5 @@
 import { useEffect } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useInfiniteQuery, useQuery } from "@tanstack/react-query";
 import { api } from "../lib/api";
 import { date, eur } from "../lib/format";
 import { useNav } from "../lib/nav";
@@ -13,11 +13,16 @@ import "../components/review/review.css";
 export default function Review() {
   const { params, go } = useNav();
   const settings = useReviewSettings();
-  const queue = useQuery({
+  const queue = useInfiniteQuery({
     queryKey: ["review-queue"],
-    queryFn: () => api.get<{ items: QueueItem[] }>("/api/documents?state=erkannt&archived=nein&sort=import_ab&limit=200"),
+    initialPageParam: 0,
+    queryFn: ({ pageParam }) => api.get<{ items: QueueItem[]; total: number; has_more: boolean }>("/api/documents", {
+      state: "erkannt", archived: "nein", sort: "import_auf", limit: 200, after_id: pageParam,
+    }),
+    getNextPageParam: (last) => last.has_more ? last.items.at(-1)?.id : undefined,
   });
-  const items = [...(queue.data?.items ?? [])].reverse();
+  const items = queue.data?.pages.flatMap((page) => page.items) ?? [];
+  const total = queue.data?.pages.at(-1)?.total ?? 0;
   const current = params.doc ?? items[0]?.id;
   const index = items.findIndex((i) => i.id === current);
 
@@ -33,8 +38,15 @@ export default function Review() {
   }, [params.doc, current, go]);
 
   const open = (id: number) => go("review", { doc: id });
-  const next = () => {
-    const n = items[index + 1] ?? items.find((i) => i.id !== current);
+  const next = async () => {
+    let n: QueueItem | undefined = items[index + 1];
+    if (!n && queue.hasNextPage) {
+      const result = await queue.fetchNextPage();
+      const all = result.data?.pages.flatMap((page) => page.items) ?? [];
+      const pos = all.findIndex((i) => i.id === current);
+      n = all[pos + 1];
+    }
+    n ??= items.find((i) => i.id !== current);
     if (n) open(n.id);
     else go("start");
   };
@@ -69,21 +81,21 @@ export default function Review() {
       <div className="rv-head">
         <PageHead
           title="Dokument prüfen"
-          lead={`${items.length} ${plural(items.length, "Dokument wartet", "Dokumente warten")} auf deine Bestätigung.`}
+          lead={`${total} ${plural(total, "Dokument wartet", "Dokumente warten")} auf deine Bestätigung.`}
         />
         <div className="rv-nav">
           <BatchConfirm ids={items.map((i) => i.id)} threshold={threshold} enabled={settings.data?.batch_confirm_enabled ?? false} />
           <button className="btn secondary" disabled={index <= 0} onClick={() => open(items[index - 1].id)}>
             ← Zurück
           </button>
-          <button className="btn secondary" disabled={index < 0 || index >= items.length - 1} onClick={() => open(items[index + 1].id)}>
+          <button className="btn secondary" disabled={index < 0 || (index >= items.length - 1 && !queue.hasNextPage) || queue.isFetchingNextPage} onClick={() => void next()}>
             Weiter →
           </button>
         </div>
       </div>
 
       <details className="card rv-queue">
-        <summary>{items.length === 1 ? "Das Dokument" : `Alle ${items.length} Dokumente`} in der Warteschlange</summary>
+        <summary>{total === 1 ? "Das Dokument" : items.length < total ? `${items.length} von ${total} Dokumenten` : `Alle ${total} Dokumente`} in der Warteschlange</summary>
         {items.map((i) => (
           <button key={i.id} className="rv-queue-item" aria-current={i.id === current} onClick={() => open(i.id)}>
             <span className="grow">{i.company_name ?? i.original_name}</span>
@@ -93,6 +105,11 @@ export default function Review() {
             </span>
           </button>
         ))}
+        {queue.hasNextPage ? (
+          <button className="btn secondary" type="button" disabled={queue.isFetchingNextPage} onClick={() => void queue.fetchNextPage()}>
+            {queue.isFetchingNextPage ? "Wird geladen …" : "Weitere Dokumente laden"}
+          </button>
+        ) : null}
       </details>
 
       {detail.isLoading ? <Spinner /> : null}
@@ -117,14 +134,14 @@ export default function Review() {
               key={d.id}
               detail={d}
               threshold={threshold}
-              hasNext={items.length > 1}
+              hasNext={total > 1}
               onConfirmed={() => {
                 forgetDraft(d.id);
-                next();
+                void next();
               }}
               onArchived={() => {
                 forgetDraft(d.id);
-                next();
+                void next();
               }}
               onOpenDoc={open}
             />

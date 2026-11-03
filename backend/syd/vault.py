@@ -262,6 +262,20 @@ MIGRATIONS: list[str] = [
     """
     ALTER TABLE reminder ADD COLUMN notified INTEGER NOT NULL DEFAULT 0;
     """,
+    """
+    ALTER TABLE deadline ADD COLUMN repeat_anchor TEXT;
+    WITH RECURSIVE series(id, anchor) AS (
+        SELECT id, due_date FROM deadline WHERE parent_id IS NULL
+        UNION ALL
+        SELECT d.id, s.anchor FROM deadline d JOIN series s ON d.parent_id = s.id
+    )
+    UPDATE deadline SET repeat_anchor = COALESCE(
+        (SELECT anchor FROM series WHERE series.id = deadline.id), due_date
+    ) WHERE repeat_months > 0;
+    """,
+    """
+    ALTER TABLE document ADD COLUMN last_extraction_run TEXT;
+    """,
 ]
 
 Key = bytes | str  # bytes: zufaelliger 32-Byte-Schluessel, str: Passwort
@@ -439,6 +453,7 @@ class Vault:
         *,
         mimes: list[str] | None = None,
         names: list[str] | None = None,
+        identity_pages: list[bytes] | None = None,
         batch_id: int | None = None,
         archive_reason: str | None = None,
     ) -> tuple[int, bool]:
@@ -448,7 +463,12 @@ class Vault:
         mimes = mimes or [mime] * len(pages)
         names = names or [original_name] * len(pages)
         page_hashes = [_sha(p) for p in pages]
-        doc_hash = _sha("".join(page_hashes).encode())
+        if identity_pages is not None and len(identity_pages) != len(pages):
+            raise ValueError("Identitaet und Seitenanzahl stimmen nicht ueberein")
+        identity_hashes = (
+            [_sha(p) for p in identity_pages] if identity_pages is not None else page_hashes
+        )
+        doc_hash = _sha("".join(identity_hashes).encode())
         with self.tx():
             row = self._conn.execute(
                 "SELECT id FROM document WHERE sha256 = ?", (doc_hash,)

@@ -42,7 +42,9 @@ def _history_category(repo: Repo, company_id: int) -> int | None:
     return Counter(r["category_id"] for r in rows).most_common(1)[0][0]
 
 
-def run_ocr(repo: Repo, document_id: int, recognise: Callable = ocr.recognise) -> tuple[str, float]:
+def run_ocr(
+    repo: Repo, document_id: int, recognise: Callable = ocr.recognise
+) -> tuple[str, float, ProcessingError | None]:
     """OCR ueber alle Teile, Text in ocr_text und Volltextindex, Vorschaubilder."""
     v = repo.v
     parts = v.rows(
@@ -82,8 +84,11 @@ def run_ocr(repo: Repo, document_id: int, recognise: Callable = ocr.recognise) -
             page_results.append((page_no, p.text, p.confidence))
     text = "\n\f\n".join(texts)
     conf = sum(confs) / len(confs) if confs else 0.0
-    if error and not text.strip():
-        raise error
+    if error and text.strip():
+        error = ProcessingError(
+            "erkennung_unvollstaendig",
+            "Ein Teil des Dokuments konnte nicht erkannt werden. Bitte alle Seiten prüfen.",
+        )
     with v.tx():
         for page, page_text, confidence in page_results:
             v.execute(
@@ -91,13 +96,23 @@ def run_ocr(repo: Repo, document_id: int, recognise: Callable = ocr.recognise) -
                 (document_id, page, page_text, confidence),
             )
             v.index_text(document_id, page, page_text)
-        v.execute(
-            "DELETE FROM ocr_text WHERE document_id = ? AND page > ?", (document_id, page_no)
-        )
-        v.execute(
-            "DELETE FROM ocr_fts WHERE document_id = ? AND page > ?", (document_id, page_no)
-        )
-    return text, conf
+        v.execute("DELETE FROM ocr_text WHERE document_id = ? AND page > ?", (document_id, page_no))
+        v.execute("DELETE FROM ocr_fts WHERE document_id = ? AND page > ?", (document_id, page_no))
+    return text, conf, error
+
+
+def _previous_values(repo: Repo, document_id: int) -> dict[str, object]:
+    values = {e["field"]: e["value"] for e in repo.latest_extractions(document_id)}
+    company = repo.find_company(values["firma"]) if values.get("firma") else None
+    category = repo.find_category(values["bereich"]) if values.get("bereich") else None
+    amount = values.get("betrag")
+    return {
+        "company_id": company["id"] if company else None,
+        "category_id": category["id"] if category else None,
+        "doc_type": values.get("art"),
+        "doc_date": values.get("datum"),
+        "amount_cents": int(amount) if amount is not None else None,
+    }
 
 
 def process_document(
@@ -117,12 +132,8 @@ def process_document(
     if doc["state"] == "geprueft":
         return {"state": "geprueft", "error": None}
     today = today or repo.today()
-    error: ProcessingError | None = None
-    text, conf = "", 0.0
-    try:
-        text, conf = run_ocr(repo, document_id, recognise)
-    except ProcessingError as exc:
-        error = exc
+    previous = _previous_values(repo, document_id)
+    text, conf, error = run_ocr(repo, document_id, recognise)
     v.execute(
         "UPDATE document SET state = 'verarbeitet', ocr_confidence = ? WHERE id = ? AND state <> 'geprueft'",
         (conf, document_id),
@@ -156,6 +167,7 @@ def process_document(
 
     run_id = uuid.uuid4().hex
     with v.tx():
+        doc = repo._doc_row(document_id)
         for name, cand in ex.fields.items():
             v.execute(
                 "INSERT INTO extraction (document_id, run_id, field, value, confidence, source)"
@@ -163,7 +175,13 @@ def process_document(
                 (document_id, run_id, name, None if cand.value is None else str(cand.value),
                  cand.confidence, cand.source),
             )  # fmt: skip
-        updates: dict[str, object] = {}
+        updates: dict[str, object] = {
+            "company_id": None,
+            "doc_type": None,
+            "doc_date": None,
+            "amount_cents": None,
+            "category_id": None,
+        }
         if ex.company_id:
             updates["company_id"] = ex.company_id
         art = ex.get("art")
@@ -189,12 +207,17 @@ def process_document(
             cat_id = found_cat["id"] if found_cat else None
         if cat_id:
             updates["category_id"] = cat_id
-        if updates:
-            sets = ", ".join(f"{k} = ?" for k in updates)
-            v.execute(
-                f"UPDATE document SET {sets} WHERE id = ? AND state <> 'geprueft'",
-                (*updates.values(), document_id),
-            )
+        updates = {
+            key: value
+            for key, value in updates.items()
+            if doc[key] is None or (previous[key] is not None and doc[key] == previous[key])
+        }
+        updates["last_extraction_run"] = run_id
+        sets = ", ".join(f"{k} = ?" for k in updates)
+        v.execute(
+            f"UPDATE document SET {sets} WHERE id = ? AND state <> 'geprueft'",
+            (*updates.values(), document_id),
+        )
         Deadlines(repo).add_suggestions(document_id, ex.deadlines)
         repo.set_references(
             document_id,

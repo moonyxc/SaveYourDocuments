@@ -223,6 +223,9 @@ class _Session:
     last_activity: float
     done: set[str] = field(default_factory=set)
     busy: set[str] = field(default_factory=set)
+    closing: bool = False
+    finishing: bool = False
+    expiry_task: asyncio.Task | None = None
 
 
 class Receiver:
@@ -290,15 +293,43 @@ class Receiver:
         hits.append(now)
         return False
 
-    def _expire_session(self) -> None:
+    async def _expire_session(self) -> None:
         s = self.session
-        if s and time.monotonic() - s.last_activity > self.session_timeout:
-            self._discard(s)
+        if (
+            s
+            and not s.busy
+            and (s.closing or time.monotonic() - s.last_activity > self.session_timeout)
+        ):
+            await self._finish(s)
 
-    def _discard(self, s: _Session) -> None:
-        shutil.rmtree(s.dir, ignore_errors=True)
+    async def _watch_session(self, s: _Session) -> None:
+        try:
+            while self.session is s:
+                delay = max(0.05, s.last_activity + self.session_timeout - time.monotonic())
+                await asyncio.sleep(delay)
+                await self._expire_session()
+        except Exception:
+            log.exception("localsend_session_expiry_failed")
+
+    def _clear_session(self, s: _Session) -> None:
         if self.session is s:
             self.session = None
+        if s.expiry_task and s.expiry_task is not asyncio.current_task():
+            s.expiry_task.cancel()
+
+    async def _finish(self, s: _Session) -> None:
+        s.closing = True
+        if s.busy or s.finishing:
+            return
+        s.finishing = True
+        try:
+            if s.batch.files:
+                await self._complete(s)
+            else:
+                shutil.rmtree(s.dir)
+                self._clear_session(s)
+        finally:
+            s.finishing = False
 
     def _check_token(self, session_id: str, file_id: str, token: str, ip: str):
         s = self.session
@@ -349,7 +380,7 @@ class Receiver:
         if self.pin is not None and not (pin and secrets.compare_digest(self.pin, pin)):
             return 401, {"message": "PIN required / Invalid PIN"}
 
-        self._expire_session()
+        await self._expire_session()
         if self.session or self._pending:
             return 409, {"message": "Blocked by another session"}
 
@@ -388,6 +419,7 @@ class Receiver:
                 batch=Batch(session_id, device, datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%SZ")),
                 last_activity=time.monotonic(),
             )
+            self.session.expiry_task = asyncio.create_task(self._watch_session(self.session))
             self.known_devices[device.fingerprint] = device
             return 200, {"sessionId": session_id, "files": dict(self.session.tokens)}
         finally:
@@ -399,7 +431,7 @@ class Receiver:
         s = self._check_token(session_id, file_id, token, ip)
         if s is None:
             return 403, {"message": "Invalid token or IP address"}
-        if file_id in s.done or file_id in s.busy:
+        if s.closing or file_id in s.done or file_id in s.busy:
             return 409, {"message": "Blocked by another session"}
         s.busy.add(file_id)
         meta = s.incoming[file_id]
@@ -428,39 +460,40 @@ class Receiver:
                     status = (422, {"message": "File type not allowed"})
                 elif meta.sha256 and digest.hexdigest() != meta.sha256:
                     status = (422, {"message": "Checksum mismatch (sha256)"})
-        except Exception:
+        except BaseException:
             target.unlink(missing_ok=True)
             s.busy.discard(file_id)
+            if s.closing:
+                await self._finish(s)
             raise
         s.busy.discard(file_id)
         s.last_activity = time.monotonic()
         if status[0] != 200:
             target.unlink(missing_ok=True)
+            if s.closing:
+                await self._finish(s)
             return status
         s.done.add(file_id)
         s.batch.files.append(
             ReceivedFile(file_id, meta.file_name, target, size, digest.hexdigest(), sniffed)
         )
-        if s.done == set(s.tokens):
-            await self._complete(s)
+        if s.closing or s.done == set(s.tokens):
+            await self._finish(s)
         return 200, None
 
     async def _complete(self, s: _Session) -> None:
         batch = s.batch
-        if self.session is s:
-            self.session = (
-                None  # Dateien bleiben in der Quarantaene, bis der Stapel uebernommen ist
-            )
         if self.on_batch:
             result = self.on_batch(batch)
             if asyncio.iscoroutine(result):
                 await result
+        self._clear_session(s)
 
-    def cancel(self, session_id: str, ip: str) -> bool:
+    async def cancel(self, session_id: str, ip: str) -> bool:
         s = self.session
         if not s or not secrets.compare_digest(s.id, session_id) or s.device.ip != ip:
             return False
-        self._discard(s)
+        await self._finish(s)
         return True
 
 
@@ -523,7 +556,7 @@ def create_app(receiver: Receiver) -> FastAPI:
     async def cancel(request: Request, sessionId: str | None = None):
         if not sessionId:
             return JSONResponse({"message": "Missing parameters"}, status_code=400)
-        receiver.cancel(sessionId, peer(request))
+        await receiver.cancel(sessionId, peer(request))
         return Response(status_code=200)
 
     return app
@@ -680,6 +713,7 @@ async def start_multicast(
     loop = asyncio.get_running_loop()
     active_registrar = registrar
     if active_registrar is None:
+
         async def default_registrar(ip: str, msg: dict) -> None:
             await register_via_http(receiver, ip, msg)
 

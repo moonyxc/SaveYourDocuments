@@ -68,6 +68,67 @@ def test_shutdown_works_before_setup(tmp_path):
     assert calls == [1]
 
 
+def test_stats_include_all_custom_types_and_csv(tmp_path):
+    client, state = make(tmp_path)
+    with client as c:
+        setup_key(c)
+        for i, doc_type in enumerate(("Eigene Art", "Mahnung", None)):
+            doc, _ = state.vault.add_document(f"{i}.png", "image/png", [bytes([i])])
+            state.repo.confirm_document(doc, {"doc_type": doc_type, "amount_cents": 1000})
+        default = c.get("/api/stats", headers=H).json()
+        all_types = c.get("/api/stats", params={"include_all": True}, headers=H).json()
+        csv = c.get("/api/stats.csv", params={"include_all": True, "group_by": "art"}, headers=H)
+        assert default["count"] == 2
+        assert all_types["count"] == 3 and all_types["total_cents"] == 3000
+        assert "Eigene Art" in csv.text and "Mahnung" in csv.text
+
+
+def test_export_plan_counts_all_items_not_only_preview(tmp_path, monkeypatch):
+    client, state = make(tmp_path)
+    with client as c:
+        setup_key(c)
+        plan = [
+            {"document_id": i // 2, "page": i, "target": f"{i}.png", "archived": i >= 200}
+            for i in range(202)
+        ]
+        monkeypatch.setattr(state.exporter, "plan", lambda *args, **kwargs: plan)
+        result = c.post("/api/export/plan", json={}, headers=H).json()
+        assert len(result["items"]) == 200 and result["total"] == 202
+        assert result["documents"] == 101 and result["archived"] == 2
+
+
+def test_review_queue_pages_in_oldest_first_order(tmp_path):
+    client, state = make(tmp_path)
+    with client as c:
+        setup_key(c)
+        for i in range(205):
+            doc, _ = state.vault.add_document(f"{i}.png", "image/png", [str(i).encode()])
+            state.vault.execute("UPDATE document SET state='erkannt' WHERE id = ?", (doc,))
+        params = {"state": "erkannt", "sort": "import_auf", "limit": 200}
+        first = c.get("/api/documents", params=params, headers=H).json()
+        last = c.get("/api/documents", params={**params, "offset": 200}, headers=H).json()
+        assert first["total"] == last["total"] == 205
+        assert len(first["items"]) == 200 and len(last["items"]) == 5
+        assert first["items"][0]["id"] < first["items"][-1]["id"] < last["items"][0]["id"]
+
+        cursor_first = c.get("/api/documents", params={**params, "after_id": 0}, headers=H).json()
+        assert cursor_first["has_more"] is True
+        assert [item["id"] for item in cursor_first["items"]] == [
+            item["id"] for item in first["items"]
+        ]
+        cursor = first["items"][-1]["id"]
+        state.vault.execute("UPDATE document SET state='geprueft' WHERE id = ?", (cursor,))
+        after_removal = c.get(
+            "/api/documents", params={**params, "after_id": cursor}, headers=H
+        ).json()
+        assert after_removal["total"] == 204
+        assert after_removal["has_more"] is False
+        assert [item["id"] for item in after_removal["items"]] == [
+            item["id"] for item in last["items"]
+        ]
+        assert c.get("/api/documents", params={"after_id": cursor}, headers=H).status_code == 400
+
+
 def test_move_aside_keeps_sqlite_sidecars_with_archive_tag(tmp_path):
     state = AppState(Paths(tmp_path / "data"), background=False, multicast=False)
     archive = tmp_path / "archiv.syd"

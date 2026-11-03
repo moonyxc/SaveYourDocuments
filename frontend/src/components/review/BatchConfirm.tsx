@@ -14,10 +14,10 @@ const MAX_CHECKED = 60;
 export function isSafe(d: DocDetail, threshold: number): boolean {
   if (d.state !== "erkannt" || d.archived) return false;
   if (d.job && (d.job.state === "wartend" || d.job.state === "laeuft" || d.job.state === "fehler")) return false;
-  if (d.company_id === null || d.doc_date === null) return false;
+  if (d.company_id === null || d.doc_date === null || d.amount_cents === null) return false;
   const conf = (f: string) => d.extractions.find((e) => e.field === f)?.confidence ?? 0;
   if (conf("firma") < threshold || conf("datum") < threshold) return false;
-  if (d.amount_cents !== null && conf("betrag") < threshold) return false;
+  if (conf("betrag") < threshold) return false;
   return !d.deadlines.some((x) => !x.confirmed);
 }
 

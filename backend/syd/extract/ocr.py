@@ -19,7 +19,6 @@ MAX_SIDE = 3600  # laengste Kante fuer OCR in Pixeln
 MIN_SIDE = 2300  # darunter wird auf TARGET_SIDE hochskaliert (ca. 220 dpi bei A4)
 TARGET_SIDE = 2500
 OCR_TIMEOUT = 180
-MAX_PAGES = 60
 GOOD_CONFIDENCE = 0.88  # darueber genuegt der erste Durchlauf
 RETRY_BUDGET = 40.0  # Sekunden fuer zusaetzliche Durchlaeufe je Seite
 
@@ -115,7 +114,7 @@ def iter_pages(data: bytes, mime: str) -> Iterator[Image.Image]:
     _register_heif()
     try:
         img = Image.open(io.BytesIO(data))
-        count = min(getattr(img, "n_frames", 1), MAX_PAGES)
+        count = getattr(img, "n_frames", 1)
     except Exception as exc:
         raise UnreadableFileError("Die Datei konnte nicht als Bild gelesen werden.") from exc
     for i in range(count):
@@ -135,7 +134,7 @@ def _iter_pdf(data: bytes) -> Iterator[Image.Image]:
     except Exception as exc:
         raise UnreadableFileError("Das PDF ist beschädigt oder passwortgeschützt.") from exc
     try:
-        for i in range(min(len(pdf), MAX_PAGES)):
+        for i in range(len(pdf)):
             page = pdf[i]
             w, h = page.get_size()
             scale = min(300 / 72, MAX_SIDE / max(w, h))
@@ -152,7 +151,7 @@ def pdf_text_layers(data: bytes) -> list[str]:
     except Exception:
         return []
     try:
-        return [pdf[i].get_textpage().get_text_range() for i in range(min(len(pdf), MAX_PAGES))]
+        return [pdf[i].get_textpage().get_text_range() for i in range(len(pdf))]
     except Exception:
         return []
     finally:
